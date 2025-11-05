@@ -1,0 +1,5 @@
+{
+  "name": "SciQuest App",
+  "description": "A futuristic login screen for the SciQuest educational platform, allowing users to log in as either a student or a teacher.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,126 @@
+{
+  "users": [
+    {
+      "id": "ltsmGeHvdZmoxO196hPqS",
+      "role": "student",
+      "email": "student@gmail.com",
+      "name": "Student",
+      "passwordHash": "$2a$10$dGtnGwX3Zh6ETy0z6Wav4.yeH1Ki/FEn.EOuauPoxAJdCeL5dyDwW",
+      "createdAt": "2025-11-04T14:57:01.615Z",
+      "updatedAt": "2025-11-04T14:57:01.615Z"
+    },
+    {
+      "id": "7yinGFqu9lYdDEHwfMjUX",
+      "role": "teacher",
+      "email": "teacher@gmail.com",
+      "name": "Teacher",
+      "passwordHash": "$2a$10$Uh3go2HQLfuoXiX4WSqSQuPBi9xhDZzDNmJk8kvg65B6lhUQ4aEMi",
+      "createdAt": "2025-11-04T14:57:29.287Z",
+      "updatedAt": "2025-11-04T14:57:29.287Z"
+    }
+  ],
+  "quizzes": [
+    {
+      "id": "quiz_1762332579217",
+      "title": "Quiz 1",
+      "type": "Card Game",
+      "mode": "Solo",
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX",
+      "status": "posted",
+      "questions": [
+        {
+          "id": 1762332570363.2986,
+          "type": "multiple-choice",
+          "category": "Earth and Space",
+          "question": "A coastal town experiences unusually high tides during a particular month. The newspaper suggests this is due to a special alignment of the Earth, Moon, and Sun. Which alignment is most likely to produce the highest tides?",
+          "options": [
+            "Quarter Moon phase, 90° alignment.",
+            "New Moon or Full Moon phase, nearly straight alignment.",
+            "Gibbous Moon phase, ~120° alignment.",
+            "Crescent Moon phase, close to the Sun."
+          ],
+          "answer": "New Moon or Full Moon phase, nearly straight alignment.",
+          "points": 10,
+          "timeLimit": 30
+        }
+      ],
+      "classIds": [
+        "cls_1762312271068"
+      ],
+      "dueDate": "2025-11-07T23:59"
+    }
+  ],
+  "students": [],
+  "messages": [
+    {
+      "id": "J0BbteTN5V0rSUOXD_1uV",
+      "title": "No class",
+      "body": "No class tommorrow",
+      "senderId": "7yinGFqu9lYdDEHwfMjUX",
+      "classId": "cls_1762312271068",
+      "date": "2025-11-05T08:18:02.342Z"
+    }
+  ],
+  "badges": [],
+  "classes": [
+    {
+      "id": "cls_1762312271068",
+      "name": "test",
+      "section": "test",
+      "code": "UNHRVK",
+      "studentCount": 0,
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX"
+    },
+    {
+      "id": "cls_1762313259890",
+      "name": "new",
+      "section": "new",
+      "code": "UCQOA9",
+      "studentCount": 0,
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX"
+    }
+  ],
+  "submissions": [],
+  "quizBank": [
+    {
+      "id": "qb_4kyarcx5c791762322757288",
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX",
+      "type": "multiple-choice",
+      "category": "Earth and Space",
+      "question": "A coastal town experiences unusually high tides during a particular month. The newspaper suggests this is due to a special alignment of the Earth, Moon, and Sun. Which alignment is most likely to produce the highest tides?",
+      "options": [
+        "Quarter Moon phase, 90° alignment.",
+        "New Moon or Full Moon phase, nearly straight alignment.",
+        "Gibbous Moon phase, ~120° alignment.",
+        "Crescent Moon phase, close to the Sun."
+      ],
+      "answer": "New Moon or Full Moon phase, nearly straight alignment.",
+      "points": 10,
+      "timeLimit": 30,
+      "createdAt": "2025-11-05T06:05:57.288Z",
+      "updatedAt": "2025-11-05T06:05:57.288Z"
+    }
+  ],
+  "announcements": [],
+  "notifications": [
+    {
+      "id": "ntf_1762360699790",
+      "title": "Quiz 1",
+      "body": "Quiz 1 has been posted for test - test.\nDue: 11/7/2025, 11:59:00 PM",
+      "recipientType": "class",
+      "recipientId": "cls_1762312271068",
+      "createdAt": "2025-11-05T16:38:19.787Z",
+      "createdBy": "7yinGFqu9lYdDEHwfMjUX",
+      "read": false,
+      "quizId": "quiz_1762332579217"
+    }
+  ],
+  "classStudents": [
+    {
+      "id": "clsstu_1762355379896",
+      "classId": "cls_1762312271068",
+      "studentId": "ltsmGeHvdZmoxO196hPqS",
+      "joinedAt": "2025-11-05T15:09:39.896Z"
+    }
+  ]
+}
