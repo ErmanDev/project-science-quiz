@@ -121,6 +121,24 @@ router.get('/:id', requireAuth, async (req, res) => {
   res.json(safe);
 });
 
+router.get('/:id', async (req, res) => {
+  await db.read();
+  const { id } = req.params;
+  const users = db.data?.users || [];
+  const u = users.find((x: any) => String(x.id) === String(id));
+  if (!u) return res.status(404).json({ error: 'User not found' });
+
+  return res.json({
+    id: u.id,
+    role: u.role,
+    email: u.email,
+    name: u.name,
+    level: u.level ?? 1,
+    xp: u.xp ?? 0,
+    accuracy: u.accuracy ?? 0,
+  });
+});
+
 // Create student
 router.post('/students', requireAuth, async (req, res) => {
   await initDB();

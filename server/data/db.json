@@ -25,16 +25,17 @@
       "accuracy": 0
     },
     {
-      "id": "7AQ2g9fWOrlRPpaeJ_v2o",
+      "id": "JrXJzhjS5WgKu-JnoHq8A",
       "role": "student",
       "email": "test@gmail.com",
       "name": "test",
-      "passwordHash": "$2a$10$ixDFfYzFa7rwUi94C11Qne5NeABtMn6asedsAaVlBLm/jvSKQrOd.",
-      "createdAt": "2025-11-09T15:25:40.522Z",
-      "updatedAt": "2025-11-09T15:25:40.522Z",
+      "passwordHash": "$2a$10$QDHoeZzLX2/kadRa9UNHVeeChUIwG/qz/b3gogW.b7oqjfnuRYgXq",
+      "createdAt": "2025-11-09T19:28:52.325Z",
+      "updatedAt": "2025-11-09T19:28:52.325Z",
       "level": 1,
-      "exp": 0,
-      "accuracy": 0
+      "xp": 0,
+      "accuracy": 0,
+      "exp": 0
     }
   ],
   "quizzes": [

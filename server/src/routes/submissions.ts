@@ -1,253 +1,93 @@
-// server/src/routes/submissions.ts
 import { Router } from 'express';
 import db from '../db';
-
-type Submission = {
-  id: string;                 // sub_<ts>
-  quizId: string;             // quiz id
-  studentId: string;          // user id
-  classId?: string | null;    // optional: which class the quiz belonged to
-  answers: any[];             // your shape
-  score?: number | null;
-  percent?: number | null;
-  submittedAt: string;        // ISO
-  gradedAt?: string | null;
-  progressApplied?: boolean;  // guard to avoid double XP apply
-};
+import { nanoid } from 'nanoid';
 
 const router = Router();
 
-/** ---------- helpers ---------- */
-const normalize = (s: string | undefined | null) =>
-  String(s ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+const XP_PER_LEVEL = 500;
 
-function clampPercent(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
-
-function applyPercentToProgress(
-  currentLevel: number | undefined,
-  currentExp: number | undefined,
-  percent: number
-) {
-  const baseLevel = Number.isFinite(currentLevel) ? Number(currentLevel) : 1;
-  const baseExp   = Number.isFinite(currentExp)   ? Number(currentExp)   : 0;
-
-  // EXP bump equals rounded percent
-  const deltaExp = clampPercent(percent);
-
-  let exp   = baseExp + deltaExp;
-  let level = baseLevel;
-  while (exp >= 100) { level += 1; exp -= 100; }
-
-  const accuracy = clampPercent(percent);
-  return { level, exp, accuracy };
-}
-
-function computeScoreAndPercentFromQuiz(quiz: any, answers: any[]) {
-  if (!quiz || !Array.isArray(quiz.questions)) {
-    return { score: 0, percent: 0 };
-  }
-  const qs = quiz.questions || [];
+// helper to recompute accuracy (% correct over all answered points)
+function recomputeAccuracyForStudent(studentId: string) {
+  const submissions = (db.data!.submissions || []).filter((s: any) => String(s.studentId) === String(studentId));
   let totalPoints = 0;
-  let score = 0;
-
-  for (const q of qs) {
-    const pts = Number(q.points) || 1;
-    totalPoints += pts;
-
-    const a = answers.find((x: any) => String(x.questionId) === String(q.id));
-    const studentAnswer = a?.answer ?? '';
-    const correct = normalize(studentAnswer) === normalize(q.answer);
-    if (correct) score += pts;
+  let earned = 0;
+  for (const s of submissions) {
+    earned += Number(s.score || 0);
+    totalPoints += Number(s.totalPoints || 0);
   }
-
-  const percent = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
-  return { score, percent: clampPercent(percent) };
+  const accuracy = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
+  return accuracy;
 }
 
-/**
- * GET /api/submissions
- * Optional filters: quizId, studentId, classId
- */
+// GET /api/submissions?studentId=...
 router.get('/', async (req, res) => {
-  try {
-    await db.read();
-    const { quizId, studentId, classId } = req.query as {
-      quizId?: string;
-      studentId?: string;
-      classId?: string;
-    };
-
-    let items: Submission[] = (db.data!.submissions as any) || [];
-    if (quizId)    items = items.filter(s => String(s.quizId)    === String(quizId));
-    if (studentId) items = items.filter(s => String(s.studentId) === String(studentId));
-    if (classId)   items = items.filter(s => String(s.classId)   === String(classId));
-
-    return res.json(items);
-  } catch (e) {
-    console.error('[submissions.get] error:', e);
-    return res.status(500).json({ error: 'Failed to load submissions' });
+  await db.read();
+  const { studentId } = req.query as { studentId?: string };
+  const list = db.data!.submissions || [];
+  if (studentId) {
+    return res.json(list.filter((s: any) => String(s.studentId) === String(studentId)));
   }
+  return res.json(list);
 });
 
-/** GET /api/submissions/:id */
-router.get('/:id', async (req, res) => {
-  try {
-    await db.read();
-    const list: Submission[] = (db.data!.submissions as any) || [];
-    const row = list.find(s => String(s.id) === String(req.params.id));
-    if (!row) return res.status(404).json({ error: 'Not found' });
-    return res.json(row);
-  } catch (e) {
-    console.error('[submissions.get/:id] error:', e);
-    return res.status(500).json({ error: 'Failed to read submission' });
-  }
-});
-
-/**
- * POST /api/submissions
- * Body: { quizId, studentId, classId?, answers, score?, percent? }
- * SIDE-EFFECT: applies progress to the student exactly once per (quizId, studentId).
- */
+// POST /api/submissions  { quizId, studentId, answers[], score, percent }
 router.post('/', async (req, res) => {
-  try {
-    await db.read();
-    db.data!.submissions ||= [];
-    db.data!.users ||= [];
-
-    const b = req.body || {};
-    if (!b.quizId || !b.studentId) {
-      return res.status(400).json({ error: 'quizId and studentId are required' });
-    }
-
-    // Idempotency guard: has this (quizId, studentId) already applied XP?
-    const alreadyAwarded = (db.data!.submissions as any[]).some(
-      s => String(s.quizId) === String(b.quizId)
-        && String(s.studentId) === String(b.studentId)
-        && s.progressApplied === true
-    );
-
-    // Compute score/percent server-side if not provided
-    let score: number | null =
-      typeof b.score === 'number' ? Number(b.score) : null;
-    let percent: number | null =
-      typeof b.percent === 'number' ? Number(b.percent) : null;
-
-    if (score === null || percent === null) {
-      const quiz = (db.data!.quizzes || []).find((q: any) => String(q.id) === String(b.quizId));
-      const computed = computeScoreAndPercentFromQuiz(quiz, Array.isArray(b.answers) ? b.answers : []);
-      if (score === null) score = computed.score;
-      if (percent === null) percent = computed.percent;
-    }
-
-    const row: Submission = {
-      id: `sub_${Date.now()}`,
-      quizId: String(b.quizId),
-      studentId: String(b.studentId),
-      classId: b.classId ? String(b.classId) : null,
-      answers: Array.isArray(b.answers) ? b.answers : [],
-      score,
-      percent,
-      submittedAt: new Date().toISOString(),
-      gradedAt: null,
-      progressApplied: false,
-    };
-
-    // Save the submission
-    (db.data!.submissions as any).push(row);
-
-    // Apply XP only if not previously awarded for this quiz+student
-    if (!alreadyAwarded && Number.isFinite(row.percent)) {
-      const users = db.data!.users as any[];
-      const uIdx = users.findIndex(u => String(u.id) === String(row.studentId));
-      if (uIdx !== -1) {
-        const u = users[uIdx];
-        const before = { level: u.level, exp: u.exp, accuracy: u.accuracy };
-        const next = applyPercentToProgress(u.level, u.exp, Number(row.percent));
-        users[uIdx] = {
-          ...u,
-          level: next.level,
-          exp: next.exp,
-          accuracy: next.accuracy,
-          updatedAt: new Date().toISOString(),
-        };
-        db.data!.users = users as any;
-
-        // mark this submission as applied
-        const subs = db.data!.submissions as any[];
-        const sIdx = subs.findIndex((s: any) => String(s.id) === String(row.id));
-        if (sIdx !== -1) subs[sIdx] = { ...subs[sIdx], progressApplied: true };
-        row.progressApplied = true;
-
-        console.log(
-          `[XP] Applied for quiz=${row.quizId} student=${row.studentId}. ` +
-          `Before L${before.level}/EXP${before.exp}/Acc${before.accuracy} -> ` +
-          `After L${next.level}/EXP${next.exp}/Acc${next.accuracy}`
-        );
-      } else {
-        console.warn('[submissions.post] user not found for studentId:', row.studentId);
-      }
-    } else if (alreadyAwarded) {
-      console.log(
-        `[XP] Skipped (already awarded) for quiz=${row.quizId} student=${row.studentId}`
-      );
-    }
-
-    await db.write();
-    return res.status(201).json(row);
-  } catch (e) {
-    console.error('[submissions.post] error:', e);
-    return res.status(500).json({ error: 'Failed to create submission' });
+  await db.read();
+  const { quizId, studentId, answers, score, percent } = req.body || {};
+  if (!quizId || !studentId) {
+    return res.status(400).json({ error: 'Missing quizId or studentId.' });
   }
-});
 
-/**
- * PATCH /api/submissions/:id
- * Body: { score?, percent?, gradedAt?, answers? }
- * We DO NOT re-apply EXP here to avoid double counting.
- */
-router.patch('/:id', async (req, res) => {
-  try {
-    await db.read();
-    const list: Submission[] = (db.data!.submissions as any) || [];
-    const idx = list.findIndex(s => String(s.id) === String(req.params.id));
-    if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  db.data!.submissions = db.data!.submissions || [];
 
-    const patch = req.body || {};
-    const updated: Submission = {
-      ...list[idx],
-      ...patch,
-      gradedAt: patch.gradedAt ?? list[idx].gradedAt,
-    };
-    list[idx] = updated;
-
-    await db.write();
-    return res.json(updated);
-  } catch (e) {
-    console.error('[submissions.patch] error:', e);
-    return res.status(500).json({ error: 'Failed to update submission' });
+  // prevent duplicate submission for the same (quizId, studentId)
+  const dup = db.data!.submissions.find(
+    (s: any) => String(s.quizId) === String(quizId) && String(s.studentId) === String(studentId)
+  );
+  if (dup) {
+    return res.status(200).json(dup); // already submitted; return existing
   }
-});
 
-/** DELETE /api/submissions/:id */
-router.delete('/:id', async (req, res) => {
-  try {
-    await db.read();
-    const list: Submission[] = (db.data!.submissions as any) || [];
-    const before = list.length;
-    db.data!.submissions = list.filter(s => String(s.id) !== String(req.params.id)) as any;
-    await db.write();
+  // compute total points from the quiz definition
+  const quiz = (db.data!.quizzes || []).find((q: any) => String(q.id) === String(quizId));
+  const totalPoints = Array.isArray(quiz?.questions)
+    ? quiz.questions.reduce((s: number, q: any) => s + Number(q.points || 0), 0)
+    : 0;
 
-    if ((db.data!.submissions as any).length === before) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('[submissions.delete] error:', e);
-    return res.status(500).json({ error: 'Failed to delete submission' });
+  const saved = {
+    id: nanoid(),
+    quizId: String(quizId),
+    studentId: String(studentId),
+    answers: Array.isArray(answers) ? answers : [],
+    score: Number(score || 0),
+    percent: Number(percent || 0),
+    totalPoints,
+    submittedAt: new Date().toISOString(),
+  };
+  db.data!.submissions.push(saved);
+
+  // ---- Update user XP/Level/Accuracy ----
+  db.data!.users = db.data!.users || [];
+  const uIdx = db.data!.users.findIndex((u: any) => String(u.id) === String(studentId));
+  if (uIdx > -1) {
+    const u = { ...db.data!.users[uIdx] };
+
+    // XP: simple rule = score * 10 (adjust to your liking)
+    const xpGain = Number(saved.score || 0) * 10;
+    u.xp = Number(u.xp || 0) + xpGain;
+
+    // Level from XP
+    u.level = Math.floor(Number(u.xp) / XP_PER_LEVEL) + 1;
+
+    // Accuracy across all submissions
+    u.accuracy = recomputeAccuracyForStudent(String(studentId));
+
+    u.updatedAt = new Date().toISOString();
+    db.data!.users[uIdx] = u;
   }
+
+  await db.write();
+  return res.json(saved);
 });
 
 export default router;

@@ -3,6 +3,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
+import { nanoid } from 'nanoid';
 import db, { initDB } from '../db';
 
 // If you already add cookieParser() in index.ts, remove the local use below.
@@ -15,6 +16,60 @@ function safeUser(u: any) {
 }
 
 router.use(cookieParser());
+
+const makeToken = (id: string) => `token_${id}_${Date.now()}`;
+
+router.post('/register', async (req, res) => {
+  await db.read();
+  const { email, name, password, role } = req.body || {};
+
+  if (!email || !name || !password || !role) {
+    return res.status(400).json({ error: 'Missing fields.' });
+  }
+  if (!['student', 'teacher'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  const users = db.data!.users || [];
+  const exists = users.find((u: any) => String(u.email).toLowerCase() === String(email).toLowerCase());
+  if (exists) {
+    return res.status(409).json({ error: 'Email already registered.' });
+  }
+
+  const passwordHash = await bcrypt.hash(String(password), 10);
+  const id = nanoid();
+
+  const newUser = {
+    id,
+    role,
+    email: String(email),
+    name: String(name),
+    passwordHash,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    // gamification defaults
+    level: 1,
+    xp: 0,
+    accuracy: 0,
+  };
+
+  db.data!.users = users;
+  db.data!.users.push(newUser);
+  await db.write();
+
+  return res.json({
+    token: makeToken(id),
+    user: {
+      id: newUser.id,
+      role: newUser.role,
+      email: newUser.email,
+      name: newUser.name,
+      level: newUser.level,
+      xp: newUser.xp,
+      accuracy: newUser.accuracy,
+    },
+  });
+});
 
 router.post('/login', async (req, res) => {
   try {
