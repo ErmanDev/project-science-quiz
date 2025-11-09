@@ -1,4 +1,4 @@
-// App.tsx
+// src/App.tsx
 import React, { useState, useEffect } from 'react';
 import SciQuestLogo from './components/SciQuestLogo';
 import LoginButton from './components/LoginButton';
@@ -59,6 +59,26 @@ const getCurrentUser = () => {
 };
 const uniq = <T,>(arr: T[]) => Array.from(new Set(arr));
 
+/** Footer links kept on main page and reused under centered cards */
+const FooterLinks: React.FC<{ onAbout: () => void; onHelp: () => void; onPrivacy: () => void }> = ({
+  onAbout, onHelp, onPrivacy,
+}) => (
+  <div className="w-full mt-6">
+    <div className="w-full border-t border-gray-500/50 my-6"></div>
+    <div className="flex justify-around w-full text-sm text-gray-400">
+      <button onClick={onAbout} className="bg-transparent border-none text-sm text-gray-400 hover:text-white transition-colors duration-300">
+        About SciQuest
+      </button>
+      <button onClick={onHelp} className="bg-transparent border-none text-sm text-gray-400 hover:text-white transition-colors duration-300">
+        Help
+      </button>
+      <button onClick={onPrivacy} className="bg-transparent border-none text-sm text-gray-400 hover:text-white transition-colors duration-300">
+        Privacy
+      </button>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   // views
   const [view, setView] = usePersistentState<View>('sciquest_view', 'main');
@@ -118,7 +138,8 @@ const App: React.FC = () => {
       if (me?.id) {
         const joined = Object.entries(rosters)
           .filter(([_, students]) =>
-            students.some(s => String((s as any).name) === String(me.id) || String((s as any).studentId) === String(me.id)))
+            students.some(s => String((s as any).name) === String(me.id) || String((s as any).studentId) === String(me.id))
+          )
           .map(([classId]) => classId);
         setStudentJoinedClassIds(joined);
       }
@@ -236,7 +257,8 @@ const App: React.FC = () => {
 
       const sortByDue = (a: Quiz, b: Quiz) =>
         (new Date(a.dueDate || 0).getTime()) - (new Date(b.dueDate || 0).getTime());
-      newQs.sort(sortByDue); missedQs.sort(sortByDue);
+      newQs.sort(sortByDue);
+      missedQs.sort(sortByDue);
 
       setStudentNewQuizzes(newQs);
       setStudentMissedQuizzes(missedQs);
@@ -246,7 +268,7 @@ const App: React.FC = () => {
     }
   }
 
-  // posting actions (teacher) – unchanged but reload buckets afterwards
+  // posting actions (teacher)
   const handlePostQuiz = async (details: { quizId: number; dueDate: string; classIds: string[] }) => {
     try {
       const res = await fetch(`${API_URL}/api/quizzes/${details.quizId}/post`, {
@@ -266,12 +288,12 @@ const App: React.FC = () => {
     } catch (e) { console.error(e); }
   };
 
-  // called by QuizTakingScreen when finished
+  // quiz completion from taking screen
   const handleQuizComplete = async (
     quizId: number | string,
     _results: { questionId: number; wasCorrect: boolean }[],
   ) => {
-    // close the taking screen first so the UI returns
+    // close taking screen
     setTakingQuizId(null);
     setTakingTeam(undefined);
 
@@ -283,7 +305,6 @@ const App: React.FC = () => {
     const me = getCurrentUser();
     if (me?.id) {
       await loadStudentQuizzesBuckets(me.id);
-      // pull updated user to reflect new xp/level/accuracy
       try {
         const ures = await fetch(`${API_URL}/api/users/${encodeURIComponent(String(me.id))}`);
         if (ures.ok) {
@@ -309,18 +330,65 @@ const App: React.FC = () => {
     setTakingTeam(team);
   };
 
+  const navigateToInfoScreen = (target: 'help'|'aboutUs'|'privacyPolicy') => {
+    setInfoScreenReturnView(view);
+    setView(target);
+  };
+
+  /** Layout classes */
   const mainClasses =
-    view === 'studentDashboard' || view === 'teacherDashboard'
+    (view === 'studentDashboard' || view === 'teacherDashboard')
       ? 'min-h-screen w-full bg-gray-50 dark:bg-brand-deep-purple font-sans'
-      : (['help','aboutUs','privacyPolicy','student','teacher','forgotPassword','verifyCode','resetPassword','passwordResetSuccess','createAccount','createTeacherAccount'].includes(view)
-          ? 'min-h-screen w-full bg-brand-deep-purple font-sans'
-          : 'min-h-screen w-full bg-brand-deep-purple flex items-center justify-center p-4 font-sans');
+      : 'min-h-screen w-full bg-brand-deep-purple font-sans';
 
-  const navigateToInfoScreen = (target: 'help'|'aboutUs'|'privacyPolicy') => { setInfoScreenReturnView(view); setView(target); };
+  /** Shared centered card wrapper for login views so both are perfectly centered */
+  const CenteredCard: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div className="min-h-screen w-full flex items-center justify-center p-4">
+      <div className="relative w-full max-w-sm">
+        <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent to-purple-600 rounded-3xl blur-xl opacity-30"></div>
+        <div className="relative bg-brand-mid-purple/60 backdrop-blur-sm border border-brand-light-purple/50 rounded-2xl text-white p-8 w-full flex flex-col items-center shadow-lg overflow-hidden">
+          {children}
+          <FooterLinks
+            onAbout={() => navigateToInfoScreen('aboutUs')}
+            onHelp={() => navigateToInfoScreen('help')}
+            onPrivacy={() => navigateToInfoScreen('privacyPolicy')}
+          />
+        </div>
+      </div>
+    </div>
+  );
 
-  // render
+  /** Main landing (original content kept) */
+  const Landing: React.FC = () => (
+    <div className="min-h-screen w-full flex items-center justify-center p-4">
+      <div className="relative w-full max-w-sm">
+        <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent to-purple-600 rounded-3xl blur-xl opacity-30"></div>
+        <div className="relative bg-brand-mid-purple/60 backdrop-blur-sm border border-brand-light-purple/50 rounded-2xl text-white p-8 w-full flex flex-col items-center shadow-lg overflow-hidden">
+          <>
+            <SciQuestLogo />
+            <p className="mt-2 text-gray-300 text-center">{t('learnPlayMaster')}</p>
+            <div className="w-full space-y-4 mt-8">
+              <LoginButton onClick={() => { setView('student'); setAuthFlowReturnView('student'); }}>
+                {t('loginAsStudent')}
+              </LoginButton>
+              <LoginButton onClick={() => { setView('teacher'); setAuthFlowReturnView('teacher'); }}>
+                {t('loginAsTeacher')}
+              </LoginButton>
+            </div>
+          </>
+          <FooterLinks
+            onAbout={() => navigateToInfoScreen('aboutUs')}
+            onHelp={() => navigateToInfoScreen('help')}
+            onPrivacy={() => navigateToInfoScreen('privacyPolicy')}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <main className={mainClasses}>
+      {/* Student & Teacher dashboards OR Taking screen */}
       {view === 'studentDashboard' ? (
         takingQuizId ? (
           <QuizTakingScreen
@@ -381,87 +449,60 @@ const App: React.FC = () => {
           onSendMessage={() => {}}
           onSendMessageToConversation={() => {}}
         />
-      ) : view === 'student' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <StudentLogin
-            onBack={() => setView('main')}
-            onForgotPassword={() => setView('forgotPassword')}
-            onCreateAccount={() => setView('createAccount')}
-            onLogin={() => { setView('studentDashboard'); setDashboardView('home'); }}
-          />
-        </div>
-      ) : view === 'teacher' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <TeacherLogin
-            onBack={() => setView('main')}
-            onForgotPassword={() => setView('forgotPassword')}
-            onCreateAccount={() => setView('createTeacherAccount')}
-            onLogin={() => setView('teacherDashboard')}
-          />
-        </div>
-      ) : view === 'forgotPassword' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <ForgotPassword
-            onBack={() => setView('main')}
-            onSendCode={() => setView('verifyCode')}
-          />
-        </div>
-      ) : view === 'verifyCode' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <VerifyCode
-            email="user@example.com"
-            onSuccess={() => setView('resetPassword')}
-          />
-        </div>
-      ) : view === 'resetPassword' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <ResetPassword onPasswordReset={() => setView('passwordResetSuccess')} />
-        </div>
-      ) : view === 'passwordResetSuccess' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <PasswordResetSuccess onFinish={() => setView('main')} />
-        </div>
-      ) : view === 'createAccount' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <CreateAccount
-            onBack={() => setView('student')}
-            onAccountCreateSubmit={() => setView('verifyAccount' as any)}
-          />
-        </div>
-      ) : view === 'createTeacherAccount' ? (
-        <div className="w-full max-w-sm mx-auto p-4">
-          <CreateTeacherAccount
-            onBack={() => setView('teacher')}
-            onAccountCreateSubmit={() => setView('verifyAccount' as any)}
-          />
-        </div>
       ) : view === 'help' ? (
         <HelpScreen onBack={() => setView(infoScreenReturnView)} />
       ) : view === 'aboutUs' ? (
         <AboutUsScreen onBack={() => setView(infoScreenReturnView)} />
       ) : view === 'privacyPolicy' ? (
         <PrivacyPolicyScreen onBack={() => setView(infoScreenReturnView)} />
+      ) : view === 'student' ? (
+        <CenteredCard>
+          <StudentLogin
+            onBack={() => setView('main')}
+            onForgotPassword={() => setView('forgotPassword')}
+            onCreateAccount={() => setView('createAccount')}
+            onLogin={() => { setView('studentDashboard'); setDashboardView('home'); }}
+          />
+        </CenteredCard>
+      ) : view === 'teacher' ? (
+        <CenteredCard>
+          <TeacherLogin
+            onBack={() => setView('main')}
+            onForgotPassword={() => setView('forgotPassword')}
+            onCreateAccount={() => setView('createTeacherAccount')}
+            onLogin={() => setView('teacherDashboard')}
+          />
+        </CenteredCard>
+      ) : view === 'forgotPassword' ? (
+        <CenteredCard>
+          <ForgotPassword onBack={() => setView(authFlowReturnView)} onSendCode={() => setView('verifyCode')} />
+        </CenteredCard>
+      ) : view === 'verifyCode' ? (
+        <CenteredCard>
+          <VerifyCode email="jhon***********@***.com" onSuccess={() => authFlowReturnView === 'student' ? setView('resetPassword') : setView(authFlowReturnView)} />
+        </CenteredCard>
+      ) : view === 'resetPassword' ? (
+        <CenteredCard>
+          <ResetPassword onPasswordReset={() => setView('passwordResetSuccess')} />
+        </CenteredCard>
+      ) : view === 'passwordResetSuccess' ? (
+        <CenteredCard>
+          <PasswordResetSuccess onFinish={() => setView(authFlowReturnView)} />
+        </CenteredCard>
+      ) : view === 'createAccount' ? (
+        <CenteredCard>
+          <CreateAccount onBack={() => setView(authFlowReturnView)} onAccountCreateSubmit={() => setView('verifyAccount')} />
+        </CenteredCard>
+      ) : view === 'createTeacherAccount' ? (
+        <CenteredCard>
+          <CreateTeacherAccount onBack={() => setView(authFlowReturnView)} onAccountCreateSubmit={() => setView('verifyAccount')} />
+        </CenteredCard>
+      ) : view === 'verifyAccount' ? (
+        <CenteredCard>
+          <VerifyCode email="jhon***********@***.com" onSuccess={() => setView(authFlowReturnView)} />
+        </CenteredCard>
       ) : (
-        // MAIN landing
-        <div className="relative w-full max-w-sm">
-          <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent to-purple-600 rounded-3xl blur-xl opacity-30"></div>
-          <div className="relative bg-brand-mid-purple/60 backdrop-blur-sm border border-brand-light-purple/50 rounded-2xl text-white p-8 w-full flex flex-col items-center shadow-lg overflow-hidden">
-            <>
-              <SciQuestLogo />
-              <p className="mt-2 text-gray-300 text-center">{t('learnPlayMaster')}</p>
-              <div className="w-full space-y-4 mt-8">
-                <LoginButton onClick={() => { setView('student'); }}>{t('loginAsStudent')}</LoginButton>
-                <LoginButton onClick={() => { setView('teacher'); }}>{t('loginAsTeacher')}</LoginButton>
-              </div>
-              <div className="w-full border-t border-gray-500/40 my-6"></div>
-              <div className="flex justify-around w-full text-sm text-gray-300">
-                <button onClick={() => { setInfoScreenReturnView('main'); setView('aboutUs'); }}>About</button>
-                <button onClick={() => { setInfoScreenReturnView('main'); setView('help'); }}>Help</button>
-                <button onClick={() => { setInfoScreenReturnView('main'); setView('privacyPolicy'); }}>Privacy</button>
-              </div>
-            </>
-          </div>
-        </div>
+        <Landing />
       )}
     </main>
   );
