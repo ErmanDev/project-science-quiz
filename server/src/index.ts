@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { initDB } from './db';
 
 import authRouter from './routes/auth';
@@ -16,9 +17,26 @@ import classStudentsRouter from './routes/classStudents';
 
 const app = express();
 
-// --- middleware ---
-app.use(cors());
+// --- CORS (allow multiple dev origins) ---
+const defaultOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+const envOrigins = (process.env.FRONTEND_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
+
+app.use(cors({
+  origin(origin, cb) {
+    // allow non-browser tools (no origin) and allowed dev origins
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS: Origin ${origin} not allowed`));
+  },
+  credentials: true, // ✅ allow cookies/authorization headers
+}));
+
+// --- parsers ---
 app.use(express.json());
+app.use(cookieParser());
 
 // --- health first ---
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -37,6 +55,10 @@ app.use('/api/class-students', classStudentsRouter);
 // --- global error handler ---
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('[ERROR]', err);
+  // If it's a CORS error, respond with proper headers
+  if (String(err?.message || '').startsWith('CORS:')) {
+    return res.status(403).json({ error: err.message });
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -46,7 +68,7 @@ const PORT = Number(process.env.PORT || 4000);
 initDB()
   .then(() => {
     app.listen(PORT, () =>
-      console.log(`API running on http://localhost:${PORT}`)
+      console.log(`API running on http://localhost:${PORT} — allowedOrigins: ${allowedOrigins.join(', ')}`)
     );
   })
   .catch((err) => {
@@ -54,5 +76,4 @@ initDB()
     process.exit(1);
   });
 
-// Optional: export app for testing
 export default app;

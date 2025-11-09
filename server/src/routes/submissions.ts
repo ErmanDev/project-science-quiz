@@ -1,3 +1,4 @@
+// server/src/routes/submissions.ts
 import { Router } from 'express';
 import db from '../db';
 
@@ -11,16 +12,64 @@ type Submission = {
   percent?: number | null;
   submittedAt: string;        // ISO
   gradedAt?: string | null;
+  progressApplied?: boolean;  // guard to avoid double XP apply
 };
 
 const router = Router();
 
+/** ---------- helpers ---------- */
+const normalize = (s: string | undefined | null) =>
+  String(s ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function clampPercent(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function applyPercentToProgress(
+  currentLevel: number | undefined,
+  currentExp: number | undefined,
+  percent: number
+) {
+  const baseLevel = Number.isFinite(currentLevel) ? Number(currentLevel) : 1;
+  const baseExp   = Number.isFinite(currentExp)   ? Number(currentExp)   : 0;
+
+  // EXP bump equals rounded percent
+  const deltaExp = clampPercent(percent);
+
+  let exp   = baseExp + deltaExp;
+  let level = baseLevel;
+  while (exp >= 100) { level += 1; exp -= 100; }
+
+  const accuracy = clampPercent(percent);
+  return { level, exp, accuracy };
+}
+
+function computeScoreAndPercentFromQuiz(quiz: any, answers: any[]) {
+  if (!quiz || !Array.isArray(quiz.questions)) {
+    return { score: 0, percent: 0 };
+  }
+  const qs = quiz.questions || [];
+  let totalPoints = 0;
+  let score = 0;
+
+  for (const q of qs) {
+    const pts = Number(q.points) || 1;
+    totalPoints += pts;
+
+    const a = answers.find((x: any) => String(x.questionId) === String(q.id));
+    const studentAnswer = a?.answer ?? '';
+    const correct = normalize(studentAnswer) === normalize(q.answer);
+    if (correct) score += pts;
+  }
+
+  const percent = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
+  return { score, percent: clampPercent(percent) };
+}
+
 /**
  * GET /api/submissions
- * Optional filters:
- *  - quizId
- *  - studentId
- *  - classId
+ * Optional filters: quizId, studentId, classId
  */
 router.get('/', async (req, res) => {
   try {
@@ -32,9 +81,9 @@ router.get('/', async (req, res) => {
     };
 
     let items: Submission[] = (db.data!.submissions as any) || [];
-    if (quizId)   items = items.filter(s => String(s.quizId)   === String(quizId));
-    if (studentId)items = items.filter(s => String(s.studentId)=== String(studentId));
-    if (classId)  items = items.filter(s => String(s.classId)  === String(classId));
+    if (quizId)    items = items.filter(s => String(s.quizId)    === String(quizId));
+    if (studentId) items = items.filter(s => String(s.studentId) === String(studentId));
+    if (classId)   items = items.filter(s => String(s.classId)   === String(classId));
 
     return res.json(items);
   } catch (e) {
@@ -60,15 +109,37 @@ router.get('/:id', async (req, res) => {
 /**
  * POST /api/submissions
  * Body: { quizId, studentId, classId?, answers, score?, percent? }
+ * SIDE-EFFECT: applies progress to the student exactly once per (quizId, studentId).
  */
 router.post('/', async (req, res) => {
   try {
     await db.read();
     db.data!.submissions ||= [];
+    db.data!.users ||= [];
 
     const b = req.body || {};
     if (!b.quizId || !b.studentId) {
       return res.status(400).json({ error: 'quizId and studentId are required' });
+    }
+
+    // Idempotency guard: has this (quizId, studentId) already applied XP?
+    const alreadyAwarded = (db.data!.submissions as any[]).some(
+      s => String(s.quizId) === String(b.quizId)
+        && String(s.studentId) === String(b.studentId)
+        && s.progressApplied === true
+    );
+
+    // Compute score/percent server-side if not provided
+    let score: number | null =
+      typeof b.score === 'number' ? Number(b.score) : null;
+    let percent: number | null =
+      typeof b.percent === 'number' ? Number(b.percent) : null;
+
+    if (score === null || percent === null) {
+      const quiz = (db.data!.quizzes || []).find((q: any) => String(q.id) === String(b.quizId));
+      const computed = computeScoreAndPercentFromQuiz(quiz, Array.isArray(b.answers) ? b.answers : []);
+      if (score === null) score = computed.score;
+      if (percent === null) percent = computed.percent;
     }
 
     const row: Submission = {
@@ -77,13 +148,53 @@ router.post('/', async (req, res) => {
       studentId: String(b.studentId),
       classId: b.classId ? String(b.classId) : null,
       answers: Array.isArray(b.answers) ? b.answers : [],
-      score: typeof b.score === 'number' ? b.score : null,
-      percent: typeof b.percent === 'number' ? b.percent : null,
+      score,
+      percent,
       submittedAt: new Date().toISOString(),
       gradedAt: null,
+      progressApplied: false,
     };
 
+    // Save the submission
     (db.data!.submissions as any).push(row);
+
+    // Apply XP only if not previously awarded for this quiz+student
+    if (!alreadyAwarded && Number.isFinite(row.percent)) {
+      const users = db.data!.users as any[];
+      const uIdx = users.findIndex(u => String(u.id) === String(row.studentId));
+      if (uIdx !== -1) {
+        const u = users[uIdx];
+        const before = { level: u.level, exp: u.exp, accuracy: u.accuracy };
+        const next = applyPercentToProgress(u.level, u.exp, Number(row.percent));
+        users[uIdx] = {
+          ...u,
+          level: next.level,
+          exp: next.exp,
+          accuracy: next.accuracy,
+          updatedAt: new Date().toISOString(),
+        };
+        db.data!.users = users as any;
+
+        // mark this submission as applied
+        const subs = db.data!.submissions as any[];
+        const sIdx = subs.findIndex((s: any) => String(s.id) === String(row.id));
+        if (sIdx !== -1) subs[sIdx] = { ...subs[sIdx], progressApplied: true };
+        row.progressApplied = true;
+
+        console.log(
+          `[XP] Applied for quiz=${row.quizId} student=${row.studentId}. ` +
+          `Before L${before.level}/EXP${before.exp}/Acc${before.accuracy} -> ` +
+          `After L${next.level}/EXP${next.exp}/Acc${next.accuracy}`
+        );
+      } else {
+        console.warn('[submissions.post] user not found for studentId:', row.studentId);
+      }
+    } else if (alreadyAwarded) {
+      console.log(
+        `[XP] Skipped (already awarded) for quiz=${row.quizId} student=${row.studentId}`
+      );
+    }
+
     await db.write();
     return res.status(201).json(row);
   } catch (e) {
@@ -95,6 +206,7 @@ router.post('/', async (req, res) => {
 /**
  * PATCH /api/submissions/:id
  * Body: { score?, percent?, gradedAt?, answers? }
+ * We DO NOT re-apply EXP here to avoid double counting.
  */
 router.patch('/:id', async (req, res) => {
   try {
@@ -104,7 +216,7 @@ router.patch('/:id', async (req, res) => {
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
     const patch = req.body || {};
-    const updated = {
+    const updated: Submission = {
       ...list[idx],
       ...patch,
       gradedAt: patch.gradedAt ?? list[idx].gradedAt,

@@ -1,14 +1,17 @@
 export type Role = 'teacher' | 'student' | 'admin';
 
+
 export interface User {
     id: string;
     role: Role;
     email: string;
     name: string;
     passwordHash: string;
-    classId?: string;
     createdAt: string;
     updatedAt: string;
+    level: number;
+    exp: number;
+    accuracy: number | null;
 }
 
 export type QuizQuestionType = 'multiple-choice' | 'true-false' | 'fill-in' | 'matching';
@@ -129,10 +132,10 @@ export type Notification = {
 };
 
 export type ClassStudent = {
-  id: string;        // e.g., `clsstd_...`
-  classId: string;
-  studentId: string;
-  joinedAt: string;
+    id: string;        // e.g., `clsstd_...`
+    classId: string;
+    studentId: string;
+    joinedAt: string;
 };
 
 export type DBSchema = {

@@ -30,11 +30,15 @@ const FeedbackModal: React.FC<{
   return (
     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className={`relative w-full max-w-xs rounded-2xl p-6 flex flex-col items-center border ${isCorrect ? 'border-green-400' : 'border-red-500'} bg-brand-mid-purple`}>
-        <h3 className={`text-3xl font-bold font-orbitron ${isCorrect ? 'text-green-400' : 'text-red-500'}`}>{isCorrect ? 'Correct!' : 'Incorrect'}</h3>
+        <h3 className={`text-3xl font-bold font-orbitron ${isCorrect ? 'text-green-400' : 'text-red-500'}`}>
+          {isCorrect ? 'Correct!' : 'Incorrect'}
+        </h3>
         <p className="text-gray-400 text-sm mt-4 text-center">{questionText}</p>
         <p className="text-gray-300 mt-2">The correct answer is:</p>
         <p className="font-bold text-lg text-brand-glow my-2 text-center">{correctAnswer}</p>
-        <button onClick={onNext} className="mt-6 w-full bg-brand-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 hover:shadow-glow">Next</button>
+        <button onClick={onNext} className="mt-6 w-full bg-brand-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-opacity-90 hover:shadow-glow">
+          Next
+        </button>
       </div>
     </div>
   );
@@ -47,39 +51,45 @@ const generateGridWithAnswer = (answer: string, size: number = 10): string[][] =
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const randomLetter = () => alphabet[Math.floor(Math.random() * alphabet.length)];
   const cleanAnswer = answer.toUpperCase().replace(/[^A-Z]/g, '');
+
   if (cleanAnswer.length === 0 || cleanAnswer.length > size * size) {
     return Array(size).fill(null).map(() => Array(size).fill('').map(randomLetter));
   }
+
   const directions = [
     { dr: 0, dc: 1 }, { dr: 1, dc: 0 }, { dr: 1, dc: 1 }, { dr: 1, dc: -1 },
     { dr: 0, dc: -1 }, { dr: -1, dc: 0 }, { dr: -1, dc: -1 }, { dr: -1, dc: 1 },
   ];
+
   for (let i = directions.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [directions[i], directions[j]] = [directions[j], directions[i]];
   }
+
   let placed = false;
   for (const { dr, dc } of directions) {
-    const valids: { r: number; c: number }[] = [];
+    const validStarts: { r: number, c: number }[] = [];
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         const endR = r + (cleanAnswer.length - 1) * dr;
         const endC = c + (cleanAnswer.length - 1) * dc;
-        if (endR >= 0 && endR < size && endC >= 0 && endC < size) valids.push({ r, c });
+        if (endR >= 0 && endR < size && endC >= 0 && endC < size) validStarts.push({ r, c });
       }
     }
-    if (valids.length) {
-      const { r, c } = valids[Math.floor(Math.random() * valids.length)];
+    if (validStarts.length > 0) {
+      const { r, c } = validStarts[Math.floor(Math.random() * validStarts.length)];
       for (let i = 0; i < cleanAnswer.length; i++) grid[r + i * dr][c + i * dc] = cleanAnswer[i];
       placed = true;
       break;
     }
   }
+
   if (!placed && cleanAnswer.length <= size) {
     const row = Math.floor(Math.random() * size);
     const startCol = Math.floor(Math.random() * (size - cleanAnswer.length + 1));
     for (let i = 0; i < cleanAnswer.length; i++) grid[row][startCol + i] = cleanAnswer[i];
   }
+
   const finalGrid: string[][] = Array(size).fill(null).map(() => Array(size).fill(''));
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) finalGrid[r][c] = grid[r][c] === null ? randomLetter() : grid[r][c]!;
@@ -88,7 +98,8 @@ const generateGridWithAnswer = (answer: string, size: number = 10): string[][] =
 };
 
 const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers, onQuizComplete }) => {
-  // STATE
+  console.log('[QuizTakingScreen] received quizId prop:', quizId);
+
   const [quiz, setQuiz] = useState<PlayQuiz | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -106,15 +117,16 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
   const [selectedCells, setSelectedCells] = useState<number[]>([]);
   const [boardAnswer, setBoardAnswer] = useState('');
 
-  // Load quiz
   useEffect(() => {
     (async () => {
+      console.log('[QuizTakingScreen] loader start. quizId=', quizId);
       try {
         if (quizId === undefined || quizId === null || String(quizId) === 'undefined') {
           throw new Error('No quiz selected. (quizId is undefined)');
         }
         setLoading(true);
         setErr('');
+
         const res = await fetch(`${API_URL}/api/quizzes/${encodeURIComponent(String(quizId))}`);
         if (!res.ok) throw new Error('Failed to load quiz.');
         const q = await res.json();
@@ -137,8 +149,10 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
           })),
         };
 
+        console.log('[QuizTakingScreen] fetched quiz object:', mapped);
         setQuiz(mapped);
       } catch (e: any) {
+        console.log('\n [QuizTakingScreen] load error:', e);
         setErr(e?.message || 'Failed to load quiz.');
       } finally {
         setLoading(false);
@@ -148,12 +162,12 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
 
   const questions = useMemo(() => quiz?.questions || [], [quiz?.questions]);
   const currentQuestion: Question | undefined = questions[currentQuestionIndex];
+
   const [timeLeft, setTimeLeft] = useState<number>(currentQuestion?.timeLimit ?? 30);
 
-  // Word-search grid
   const boardGrid = useMemo(() => {
     if (!quiz || quiz.subpart !== 'Board Game' || !currentQuestion || currentQuestion.type !== 'identification') return [];
-    return generateGridWithAnswer((currentQuestion as IdentificationQuestion).answer);
+    return generateGridWithAnswer((currentQuestion as any as IdentificationQuestion).answer);
   }, [quiz, currentQuestion]);
 
   const selectedWord = useMemo(() => {
@@ -171,10 +185,38 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
   useEffect(() => {
     if (quiz?.subpart !== 'Board Game') return;
     window.addEventListener('pointerup', handleGridPointerUp);
-    return () => window.removeEventListener('pointerup', handleGridPointerUp);
+    return () => { window.removeEventListener('pointerup', handleGridPointerUp); };
   }, [quiz?.subpart, handleGridPointerUp]);
 
-  // Timer
+  const calculateAndFinish = () => {
+    const results = questions.map(q => ({ questionId: q.id, wasCorrect: questionResults.get(q.id) || false }));
+    onQuizComplete(quiz!.id, results, quiz!.teamMembers);
+  };
+
+  const handleNextQuestionFromModal = () => {
+    setShowFeedbackModal(false);
+    setLastAnswerResult(null);
+    setIsFlipped(false);
+    setSelectedCells([]);
+    setBoardAnswer('');
+    if (currentQuestionIndex >= questions.length - 1) calculateAndFinish();
+    else setCurrentQuestionIndex(prev => prev + 1);
+  };
+
+  const handleCheckAnswer = useCallback(() => {
+    if (!currentQuestion) return;
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
+    let studentAnswer = '';
+    if (quiz?.subpart === 'Board Game') studentAnswer = boardAnswer;
+    else studentAnswer = answers.get(currentQuestion.id) || '';
+
+    const isCorrect = normalize(studentAnswer) === normalize(currentQuestion.answer);
+    setLastAnswerResult({ correct: isCorrect });
+    setQuestionResults(prev => new Map(prev).set(currentQuestion.id, isCorrect));
+    setShowFeedbackModal(true);
+  }, [currentQuestion, boardAnswer, answers, quiz?.subpart]);
+
   useEffect(() => {
     if (!currentQuestion || !currentQuestion.timeLimit) return;
     setTimeLeft(currentQuestion.timeLimit);
@@ -190,7 +232,7 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
       });
     }, 1000);
     return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [currentQuestionIndex, currentQuestion]); // eslint-disable-line
+  }, [currentQuestionIndex, currentQuestion, handleCheckAnswer]);
 
   const handleAnswerSelect = (answer: string) => {
     if (!currentQuestion) return;
@@ -199,107 +241,10 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
     setAnswers(newAnswers);
   };
 
-  // Evaluate current question
-  const handleCheckAnswer = useCallback(() => {
-    if (!currentQuestion) return;
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-    let studentAnswer = '';
-    if (quiz?.subpart === 'Board Game') studentAnswer = boardAnswer;
-    else studentAnswer = answers.get(currentQuestion.id) || '';
-
-    const isCorrect = normalize(studentAnswer) === normalize(currentQuestion.answer);
-    setLastAnswerResult({ correct: isCorrect });
-    setQuestionResults(prev => new Map(prev).set(currentQuestion.id, isCorrect));
-    setShowFeedbackModal(true);
-  }, [currentQuestion, boardAnswer, answers, quiz?.subpart]);
-
-  const calculateAndFinish = async () => {
-    // ensure feedback modal is closed
-    setShowFeedbackModal(false);
-
-    if (!quiz) return;
-
-    const results = questions.map(q => ({
-      questionId: q.id,
-      wasCorrect: questionResults.get(q.id) || false,
-    }));
-
-    // compute score & percent
-    const totalPoints = questions.reduce((s, q) => s + (q.points || 0), 0);
-    const score = results.reduce((s, r) => {
-      const q = questions.find(qq => qq.id === r.questionId)!;
-      return s + (r.wasCorrect ? (q.points || 0) : 0);
-    }, 0);
-    const percent = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
-
-    // build answers payload
-    const answersPayload = questions.map(q => {
-      const studentAnswer = (quiz.subpart === 'Board Game')
-        ? (q.id === questions[currentQuestionIndex]?.id ? boardAnswer : '')
-        : (answers.get(q.id) || '');
-
-      return {
-        questionId: q.id,
-        answer: studentAnswer,
-        correctAnswer: q.answer,
-        wasCorrect: questionResults.get(q.id) || false,
-        points: q.points || 0,
-      };
-    });
-
-    // who am I?
-    let me: { id?: string } = {};
-    try {
-      me = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    } catch {}
-
-    // POST to /api/submissions (server will update XP/level/accuracy)
-    try {
-      const payload = {
-        quizId: quiz.id,
-        studentId: me?.id,
-        answers: answersPayload,
-        score,
-        percent,
-      };
-      const res = await fetch(`${API_URL}/api/submissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        console.error('[QuizTakingScreen] submission failed:', t);
-      } else {
-        const saved = await res.json();
-        console.log('[QuizTakingScreen] submission saved:', saved);
-      }
-    } catch (e) {
-      console.error('[QuizTakingScreen] submission error:', e);
-    }
-
-    // IMPORTANT: no client-side XP update here. Server is source of truth.
-
-    // Notify parent so it can close the quiz modal / move to Done
-    onQuizComplete(quiz.id, results, quiz.teamMembers);
-  };
-
-  const handleNextQuestionFromModal = () => {
-    setShowFeedbackModal(false);
-    setLastAnswerResult(null);
-    setIsFlipped(false);
-    setSelectedCells([]);
-    setBoardAnswer('');
-
-    if (currentQuestionIndex >= questions.length - 1) {
-      void calculateAndFinish();
-    } else {
-      setCurrentQuestionIndex(prev => prev + 1);
-    }
-  };
+  const handlePrev = () => { if (currentQuestionIndex > 0) setCurrentQuestionIndex(prev => prev - 1); };
 
   const handleCellPointerDown = (index: number) => { setIsDragging(true); setSelectedCells([index]); setBoardAnswer(''); };
+
   const handleCellPointerEnter = (index: number) => {
     if (!isDragging || selectedCells.includes(index)) return;
     const lastIndex = selectedCells[selectedCells.length - 1];
@@ -322,17 +267,17 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
     );
   }
 
-  // BOARD GAME UI
+  // BOARD GAME UI (unchanged layout-wise)
   if (quiz.subpart === 'Board Game') {
     return (
       <div className="relative w-full max-w-sm mx-auto h-screen flex flex-col text-white p-4 bg-brand-deep-purple">
-        <header className="flex-shrink-0 mb-4 text-center">
+        <header className="flex-shrink-0 mb-4 text-center sticky top-0 z-10 bg-brand-deep-purple pt-1">
           <h1 className="text-2xl font-bold font-orbitron truncate">{quiz.topic}</h1>
           <p className="text-lg text-brand-glow">{quiz.subpart}</p>
         </header>
 
         <main className="flex-grow flex flex-col items-center justify-center space-y-4">
-          <p className="text-lg font-semibold text-center">{currentQuestion!.question}</p>
+          <p className="text-lg font-semibold text-center whitespace-pre-wrap break-words leading-relaxed">{currentQuestion!.question}</p>
 
           <div className="text-center">
             <p className="text-gray-300">Time Left</p>
@@ -384,17 +329,18 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
     );
   }
 
-  // NORMAL & CARD GAME UI
+  // NORMAL & CARD GAME UI — question container is now auto-expanding with a safe cap
   const progressPercentage = ((currentQuestionIndex + 1) / questions.length) * 100;
   const isMultipleChoice = currentQuestion!.type === 'multiple-choice';
 
   return (
-    <div className="relative w-full max-w-sm mx-auto h-screen flex flex-col text-white p-4">
-      <header className="flex-shrink-0 mb-4">
+    <div className="relative w-full max-w-sm mx-auto h-screen flex flex-col text-white p-4 bg-brand-deep-purple">
+      {/* Sticky header so progress never covers content; content scrolls beneath */}
+      <header className="flex-shrink-0 sticky top-0 z-10 bg-brand-deep-purple pt-1 pb-3">
         <h1 className="text-2xl font-bold font-orbitron truncate">{quiz.topic}</h1>
         <p className="text-brand-glow">{quiz.subpart}</p>
-        <div className="mt-4">
-          <div className="flex justify-between items-center text-sm text-gray-400">
+        <div className="mt-3">
+          <div className="flex justify-between items-center text-sm text-gray-400 mb-1">
             <span>Progress</span>
             <span>Question {currentQuestionIndex + 1}/{questions.length}</span>
           </div>
@@ -404,27 +350,42 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
         </div>
       </header>
 
-      <main className="flex-grow flex flex-col justify-start overflow-y-auto hide-scrollbar pt-4">
-        {quiz.teamMembers && (
-          <div className="text-center mb-3">
-            <p className="text-lg font-semibold text-brand-glow animate-pulse">
-              {quiz.teamMembers[currentQuestionIndex % quiz.teamMembers.length]}'s Turn!
-            </p>
-          </div>
-        )}
-
-        <div className="bg-brand-mid-purple/80 p-4 rounded-2xl border border-brand-light-purple/50 space-y-4">
-          {currentQuestion!.imageUrl && (
-            <div className="rounded-lg overflow-hidden bg-black/20 flex items-center justify-center">
-              <img src={currentQuestion!.imageUrl} alt="Question visual aid" className="max-h-48 w-full object-contain" />
+      {/* The main area can scroll if content is tall */}
+      <main className="flex-grow flex flex-col overflow-y-auto">
+        <div
+          className="
+            bg-brand-mid-purple/80 border border-brand-light-purple/50 rounded-2xl
+            p-4 md:p-6 space-y-4
+            overflow-y-auto
+            max-h-[68vh] md:max-h-[70vh]
+            min-h-[8rem]
+          "
+        >
+          {quiz.teamMembers && (
+            <div className="text-center">
+              <p className="text-base md:text-lg font-semibold text-brand-glow">
+                {quiz.teamMembers[currentQuestionIndex % quiz.teamMembers.length]}'s Turn!
+              </p>
             </div>
           )}
 
-          {/* Question block grows naturally with content; no fixed height */}
-          <p className="text-base font-semibold text-center leading-relaxed">{currentQuestion!.question}</p>
+          {currentQuestion!.imageUrl && (
+            <div className="rounded-lg overflow-hidden bg-black/20 flex items-center justify-center">
+              <img
+                src={currentQuestion!.imageUrl}
+                alt="Question visual aid"
+                className="max-h-[32vh] w-auto object-contain"
+              />
+            </div>
+          )}
+
+          {/* AUTO-EXPANDING QUESTION TEXT */}
+          <p className="text-base md:text-lg font-semibold text-center whitespace-pre-wrap break-words leading-relaxed">
+            {currentQuestion!.question}
+          </p>
 
           {isMultipleChoice ? (
-            <div className="space-y-2 pt-2">
+            <div className="space-y-3 pt-1">
               {(currentQuestion as MultipleChoiceQuestion).options.map((option, index) => {
                 const isSelected = answers.get(currentQuestion!.id) === option;
                 return (
@@ -436,7 +397,9 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
                       setAnswers(newAnswers);
                     }}
                     className={`w-full text-left p-3 rounded-lg border-2 transition-all duration-200
-                      ${isSelected ? 'bg-brand-glow/30 border-brand-glow text-white font-bold' : 'bg-brand-deep-purple/50 border-brand-light-purple/50 text-gray-300 hover:bg-brand-light-purple/30'}`}
+                      ${isSelected
+                        ? 'bg-brand-glow/30 border-brand-glow text-white font-bold'
+                        : 'bg-brand-deep-purple/50 border-brand-light-purple/50 text-gray-300 hover:bg-brand-light-purple/30'}`}
                   >
                     {option}
                   </button>
@@ -444,7 +407,7 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
               })}
             </div>
           ) : (
-            <div className="pt-2">
+            <div className="pt-1">
               <input
                 type="text"
                 value={answers.get(currentQuestion!.id) || ''}
@@ -475,10 +438,10 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
             const studentAnswer = answers.get(currentQuestion!.id) || '';
             const isCorrect = normalize(studentAnswer) === normalize(currentQuestion!.answer);
             setLastAnswerResult({ correct: isCorrect });
-            setQuestionResults(prev => new Map(prev).set(currentQuestion.id, isCorrect));
+            setQuestionResults(prev => new Map(prev).set(currentQuestion!.id, isCorrect));
             setShowFeedbackModal(true);
           }}
-          disabled={!answers.get(currentQuestion!.id) && quiz.subpart !== 'Board Game'}
+          disabled={!answers.get(currentQuestion!.id)}
           className="px-8 py-3 rounded-lg bg-green-500 font-bold text-lg hover:bg-green-600 shadow-lg shadow-green-500/20 disabled:bg-gray-500/50 disabled:cursor-not-allowed disabled:shadow-none"
         >
           Submit Answer

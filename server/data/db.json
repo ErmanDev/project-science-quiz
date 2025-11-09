@@ -7,7 +7,10 @@
       "name": "Student",
       "passwordHash": "$2a$10$dGtnGwX3Zh6ETy0z6Wav4.yeH1Ki/FEn.EOuauPoxAJdCeL5dyDwW",
       "createdAt": "2025-11-04T14:57:01.615Z",
-      "updatedAt": "2025-11-04T14:57:01.615Z"
+      "updatedAt": "2025-11-09T18:35:02.554Z",
+      "level": 3,
+      "exp": 0,
+      "accuracy": 100
     },
     {
       "id": "7yinGFqu9lYdDEHwfMjUX",
@@ -16,7 +19,22 @@
       "name": "Teacher",
       "passwordHash": "$2a$10$Uh3go2HQLfuoXiX4WSqSQuPBi9xhDZzDNmJk8kvg65B6lhUQ4aEMi",
       "createdAt": "2025-11-04T14:57:29.287Z",
-      "updatedAt": "2025-11-04T14:57:29.287Z"
+      "updatedAt": "2025-11-04T14:57:29.287Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    },
+    {
+      "id": "7AQ2g9fWOrlRPpaeJ_v2o",
+      "role": "student",
+      "email": "test@gmail.com",
+      "name": "test",
+      "passwordHash": "$2a$10$ixDFfYzFa7rwUi94C11Qne5NeABtMn6asedsAaVlBLm/jvSKQrOd.",
+      "createdAt": "2025-11-09T15:25:40.522Z",
+      "updatedAt": "2025-11-09T15:25:40.522Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
     }
   ],
   "quizzes": [
@@ -48,7 +66,7 @@
         "cls_1762312271068",
         "cls_1762313259890"
       ],
-      "dueDate": "2025-11-09T23:59"
+      "dueDate": "2025-11-10T23:59"
     },
     {
       "id": "1762697870757",
@@ -105,7 +123,48 @@
       "teacherId": "7yinGFqu9lYdDEHwfMjUX"
     }
   ],
-  "submissions": [],
+  "submissions": [
+    {
+      "id": "sub_1762713189105",
+      "quizId": "quiz_1762332579217",
+      "studentId": "ltsmGeHvdZmoxO196hPqS",
+      "classId": null,
+      "answers": [
+        {
+          "questionId": 1762570654154.9731,
+          "answer": "Crescent Moon phase, close to the Sun.",
+          "correctAnswer": "New Moon or Full Moon phase, nearly straight alignment.",
+          "wasCorrect": false,
+          "points": 10
+        }
+      ],
+      "score": 0,
+      "percent": 0,
+      "submittedAt": "2025-11-09T18:33:09.105Z",
+      "gradedAt": null,
+      "progressApplied": true
+    },
+    {
+      "id": "sub_1762713302554",
+      "quizId": "1762697870757",
+      "studentId": "ltsmGeHvdZmoxO196hPqS",
+      "classId": null,
+      "answers": [
+        {
+          "questionId": 1762697866409.1216,
+          "answer": "BOARD",
+          "correctAnswer": "board",
+          "wasCorrect": true,
+          "points": 10
+        }
+      ],
+      "score": 10,
+      "percent": 100,
+      "submittedAt": "2025-11-09T18:35:02.554Z",
+      "gradedAt": null,
+      "progressApplied": true
+    }
+  ],
   "quizBank": [
     {
       "id": "qb_4kyarcx5c791762322757288",

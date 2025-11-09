@@ -1,56 +1,71 @@
+// server/src/routes/auth.ts
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
+import cookieParser from 'cookie-parser';
 import db, { initDB } from '../db';
-import type { User } from '../types';
-import { signToken } from '../middleware/auth';
 
+// If you already add cookieParser() in index.ts, remove the local use below.
 const router = Router();
 
-router.post('/register', async (req, res, next) => {
+// util: strip hash
+function safeUser(u: any) {
+  const { passwordHash, ...rest } = u || {};
+  return rest;
+}
+
+router.use(cookieParser());
+
+router.post('/login', async (req, res) => {
   try {
     await initDB();
-    const { email, name, password, role = 'teacher', classId } = req.body || {};
-    if (!email || !name || !password) return res.status(400).json({ error: 'email, name, password required' });
+    const { email, password, portal } = req.body || {};
 
-    const exists = db.data!.users.find(u => u.email.toLowerCase() === String(email).toLowerCase());
-    if (exists) return res.status(409).json({ error: 'Email already used' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
 
-    const now = new Date().toISOString();
-    const user: User = {
-      id: nanoid(),
-      role,
-      email,
-      name,
-      passwordHash: bcrypt.hashSync(password, 10),
-      classId,
-      createdAt: now,
-      updatedAt: now,
-    };
-    db.data!.users.push(user);
-    await db.write();
+    const user = (db.data!.users || []).find(
+      (u) => u.email?.toLowerCase() === String(email).toLowerCase()
+    );
 
-    const token = signToken({ id: user.id, role: user.role });
-    res.status(201).json({ user: { id: user.id, role: user.role, email: user.email, name: user.name, classId: user.classId }, token });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const ok = await bcrypt.compare(String(password), String(user.passwordHash || ''));
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // ✅ Portal guard (optional). Only enforce if the client specifies a portal.
+    if (portal === 'student' && user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students are allowed to log in.' });
+    }
+    if (portal === 'teacher' && user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers are allowed to log in.' });
+    }
+
+    // issue token
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET || 'dev-secret',
+      { expiresIn: '7d' }
+    );
+
+    // send as httpOnly cookie (and in body if you prefer)
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: false, // set true behind HTTPS
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .json({ token, user: safeUser(user) });
   } catch (err) {
-    next(err);
+    console.error('[auth/login] error', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/login', async (req, res, next) => {
-  try {
-    await initDB();
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-    const user = db.data!.users.find(u => u.email.toLowerCase() === String(email).toLowerCase());
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    const ok = bcrypt.compareSync(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = signToken({ id: user.id, role: user.role });
-    res.json({ user: { id: user.id, role: user.role, email: user.email, name: user.name, classId: user.classId }, token });
-  } catch (err) {
-    next(err);
-  }
+router.post('/logout', (_req, res) => {
+  res.clearCookie('token').json({ ok: true });
 });
 
 export default router;
