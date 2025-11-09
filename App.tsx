@@ -16,294 +16,371 @@ import PrivacyPolicyScreen from './components/PrivacyPolicyScreen';
 import TeacherLogin from './components/TeacherLogin';
 import TeacherDashboard from './components/teacher/TeacherDashboard';
 import { ClassData } from './components/teacher/ClassroomScreen';
-import { ClassStudent, classStudentData } from './data/classStudentData';
-import { TeacherQuiz, postedQuizzes as initialPostedQuizzes, draftQuizzes as initialDraftQuizzes } from './data/teacherQuizzes';
-import { Quiz, newQuizzes as initialNewQuizzes, initialDoneQuizzes, DoneQuiz, View, DashboardView, initialMissedQuizzes, QuestionResult } from './data/quizzes';
+import { ClassStudent } from './data/classStudentData';
+import { TeacherQuiz } from './data/teacherQuizzes';
+import { Quiz, DoneQuiz, View, DashboardView, QuestionResult } from './data/quizzes';
 import { Question } from './data/teacherQuizQuestions';
 import { Badge, BadgeCategory, badgeData } from './data/badges';
-import { AvatarRank1, AvatarRank2, AvatarRank3 } from './components/icons';
 import { TeacherProfileData } from './components/teacher/EditTeacherProfileModal';
 import { usePersistentState } from './hooks/usePersistentState';
+import { API_URL } from './server/src/config';
 
-export interface ChatMessage {
-  id: number;
-  text: string;
-  senderName: string;
-  timestamp: Date;
-}
+// 🔧 import your taking UI
+import QuizTakingScreen from './components/quiz/QuizTakingScreen';
 
-export interface Conversation {
+/** --------------------
+ *  Helpers
+ * -------------------- */
+type ServerSubmission = {
   id: string;
-  participantNames: string[];
-  messages: ChatMessage[];
-  title?: string; // For group chats/announcements
-}
-
-const initialClasses: ClassData[] = [
-    {
-        id: '1',
-        name: 'Grade 7',
-        section: 'Integrity',
-        code: 'ABC123',
-        studentCount: classStudentData.length,
-    },
-    {
-        id: '2',
-        name: 'Grade 7',
-        section: 'Fortitude',
-        code: 'XYZ789',
-        studentCount: 20,
-    },
-     {
-        id: '3',
-        name: 'Grade 7',
-        section: 'Hope',
-        code: 'QWE456',
-        studentCount: 49,
-    },
-];
-
-// Centralized data that gets updated on quiz completion
-const xpPerLevel = 500;
-
-const singleQuizScores = [
-    // Scores for Quiz #2 (id: 2)
-    { name: 'Jhon Rexell Pereira', quizNumber: 2, score: '90%', classId: '1' },
-    { name: 'Neil Jordan Moron', quizNumber: 2, score: '80%', classId: '1' },
-    { name: 'Joemari Atencio', quizNumber: 2, score: '75%', classId: '1' },
-    { name: 'Maria Santos', quizNumber: 2, score: '95%', classId: '1' },
-    { name: 'Juan Dela Cruz', quizNumber: 2, score: '85%', classId: '1' },
-    { name: 'Lana del Rey', quizNumber: 2, score: '100%', classId: '1' },
-    { name: 'Mike Johnson', quizNumber: 2, score: '90%', classId: '1' },
-    // Scores for Quiz #3 (id: 3)
-    { name: 'Jhon Rexell Pereira', quizNumber: 3, score: '80%', classId: '1' },
-    { name: 'Lana del Rey', quizNumber: 3, score: '85%', classId: '1' },
-    { name: 'Mike Johnson', quizNumber: 3, score: '95%', classId: '1' },
-];
-
-const allQuizzesScores = [
-    // Class 1
-    { name: 'Jhon Rexell Pereira', average: 85, classId: '1' },
-    { name: 'Neil Jordan Moron', average: 72, classId: '1' },
-    { name: 'Joemari Atencio', average: 68, classId: '1' },
-    { name: 'Maria Santos', average: 85, classId: '1' },
-    { name: 'Juan Dela Cruz', average: 72, classId: '1' },
-    { name: 'Lana del Rey', average: 91, classId: '1' },
-    { name: 'Mike Johnson', average: 88, classId: '1' },
-    // Some students for class 2
-    { name: 'Student X', average: 95, classId: '2' },
-    { name: 'Student Y', average: 80, classId: '2' },
-];
-
-const teamsData = {
-    '1': { // classId
-        'Team Alpha': ['Jhon Rexell Pereira', 'Neil Jordan Moron', 'Joemari Atencio'],
-        'Team Beta': ['Maria Santos', 'Juan Dela Cruz', 'Lana del Rey', 'Mike Johnson'],
-    }
+  quizId: string | number;
+  studentId: string;
+  score?: number;
+  submittedAt?: string;
 };
 
+type ServerQuizSummary = {
+  id: string | number;
+  title: 'Card Game' | 'Board Game' | 'Normal' | string;
+  type: 'Card Game' | 'Board Game' | 'Normal';
+  mode: 'Solo' | 'Team' | 'Classroom';
+  status: 'draft' | 'posted';
+  teacherId: string;
+  questions: Array<{ id: string | number; points: number }>;
+  classIds?: string[];
+  dueDate?: string | null;
+};
+
+const xpPerLevel = 500;
+
+const getCurrentUser = () => {
+  try {
+    const raw = localStorage.getItem('currentUser');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const uniq = <T,>(arr: T[]) => Array.from(new Set(arr));
+
+/** --------------------
+ *  App
+ * -------------------- */
 const App: React.FC = () => {
+  // High-level view state
   const [view, setView] = usePersistentState<View>('sciquest_view', 'main');
   const [dashboardView, setDashboardView] = usePersistentState<DashboardView>('sciquest_dashboardView', 'home');
   const [isDarkMode, setIsDarkMode] = usePersistentState<boolean>('sciquest_isDarkMode', true);
   const { t } = useTranslations();
   const [infoScreenReturnView, setInfoScreenReturnView] = usePersistentState<View>('sciquest_infoScreenReturnView', 'main');
   const [authFlowReturnView, setAuthFlowReturnView] = usePersistentState<'student' | 'teacher'>('sciquest_authFlowReturnView', 'student');
-  
-  // Shared State
-  const [classes, setClasses] = usePersistentState<ClassData[]>('sciquest_classes', initialClasses);
-  const [classRosters, setClassRosters] = usePersistentState<Record<string, ClassStudent[]>>('sciquest_classRosters', { '1': classStudentData });
-  const [draftQuizzes, setDraftQuizzes] = usePersistentState<TeacherQuiz[]>('sciquest_draftQuizzes', initialDraftQuizzes);
-  const [postedQuizzes, setPostedQuizzes] = usePersistentState<TeacherQuiz[]>('sciquest_postedQuizzes', initialPostedQuizzes);
-  
-  // Student-specific state
-  const [studentNewQuizzes, setStudentNewQuizzes] = usePersistentState<Quiz[]>('sciquest_studentNewQuizzes', initialNewQuizzes);
-  const [studentDoneQuizzes, setStudentDoneQuizzes] = usePersistentState<DoneQuiz[]>('sciquest_studentDoneQuizzes', initialDoneQuizzes);
-  const [studentMissedQuizzes, setStudentMissedQuizzes] = usePersistentState<Quiz[]>('sciquest_studentMissedQuizzes', initialMissedQuizzes);
-  const [studentJoinedClassIds, setStudentJoinedClassIds] = usePersistentState<string[]>('sciquest_studentJoinedClassIds', ['1']); // Assume joined class 1
-  const [takingQuiz, setTakingQuiz] = usePersistentState<(Quiz & { teamMembers?: string[] }) | null>('sciquest_takingQuiz', null);
+
+  // Server-backed states — start EMPTY, we fetch everything
+  const [classes, setClasses] = usePersistentState<ClassData[]>('sciquest_classes', []);
+  const [classRosters, setClassRosters] = usePersistentState<Record<string, ClassStudent[]>>('sciquest_classRosters', {});
+  const [draftQuizzes, setDraftQuizzes] = usePersistentState<TeacherQuiz[]>('sciquest_draftQuizzes', []);
+  const [postedQuizzes, setPostedQuizzes] = usePersistentState<TeacherQuiz[]>('sciquest_postedQuizzes', []);
+
+  // Student quiz buckets (derived from server data)
+  const [studentNewQuizzes, setStudentNewQuizzes] = usePersistentState<Quiz[]>('sciquest_studentNewQuizzes', []);
+  const [studentDoneQuizzes, setStudentDoneQuizzes] = usePersistentState<DoneQuiz[]>('sciquest_studentDoneQuizzes', []);
+  const [studentMissedQuizzes, setStudentMissedQuizzes] = usePersistentState<Quiz[]>('sciquest_studentMissedQuizzes', []);
+  const [studentJoinedClassIds, setStudentJoinedClassIds] = usePersistentState<string[]>('sciquest_studentJoinedClassIds', []);
+
+  // 🔧 Quiz in progress (ID-only, matches QuizTakingScreen prop)
+  const [takingQuizId, setTakingQuizId] = useState<string | number | null>(null);
+  const [takingTeam, setTakingTeam] = useState<string[] | undefined>(undefined);
+
+  // Badges and completion pop
   const [badgeProgress, setBadgeProgress] = usePersistentState<BadgeCategory[]>('sciquest_badgeProgress', badgeData);
   const [lastCompletedQuizStats, setLastCompletedQuizStats] = usePersistentState<{ quiz: DoneQuiz; earnedBadges: Badge[]; } | null>('sciquest_lastCompletedQuizStats', null);
-  
-  // Centralized student data state
+
+  // Profiles
   const [studentProfile, setStudentProfile] = usePersistentState<ProfileData>('sciquest_studentProfile', {
-      name: 'Jhon Rexell Pereira',
-      bio: '???',
-      avatar: null,
-      level: 1,
-      xp: 0,
-      accuracy: 0,
-      streaks: 0,
+    name: 'Student',
+    bio: '',
+    avatar: null,
+    level: 1,
+    xp: 0,
+    accuracy: 0,
+    streaks: 0,
   });
 
-  // Centralized teacher data state
   const [teacherProfile, setTeacherProfile] = usePersistentState<TeacherProfileData>('sciquest_teacherProfile', {
-      name: 'Lady Ashira',
-      email: 'santos@example.com',
-      motto: 'Motto',
-      avatar: null,
+    name: 'Teacher',
+    email: 'teacher@gmail.com',
+    motto: '',
+    avatar: null,
   });
 
-  const initialConversations: Conversation[] = [
-    {
-        id: 'Lady Ashira-Jhon Rexell Pereira',
-        participantNames: ['Lady Ashira', 'Jhon Rexell Pereira'],
-        messages: [
-            { id: 1, text: 'Hi Jhon, how are you preparing for the upcoming physics quiz?', senderName: 'Lady Ashira', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2) },
-            { id: 2, text: 'Hello Ma\'am! I\'m reviewing my notes on Newtonian Mechanics.', senderName: 'Jhon Rexell Pereira', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5) },
-            { id: 3, text: 'Great! Let me know if you have any questions.', senderName: 'Lady Ashira', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1) },
-        ]
-    }
-  ];
+  // Chat/announcements (start empty)
+  const [conversations, setConversations] = usePersistentState('sciquest_conversations', [] as {
+    id: string;
+    participantNames: string[];
+    messages: { id: number; text: string; senderName: string; timestamp: Date }[];
+    title?: string;
+  }[]);
 
-  const [conversations, setConversations] = usePersistentState<Conversation[]>('sciquest_conversations', initialConversations);
-
-  const handleSendMessageToConversation = (conversationId: string, newMessage: Omit<ChatMessage, 'id'>) => {
-    setConversations(prev => {
-        const convoIndex = prev.findIndex(c => c.id === conversationId);
-        if (convoIndex > -1) {
-            const updatedConvo = { ...prev[convoIndex] };
-            updatedConvo.messages.push({ ...newMessage, id: Date.now() });
-            const newConversations = [...prev];
-            newConversations.splice(convoIndex, 1);
-            newConversations.unshift(updatedConvo);
-            return newConversations;
-        }
-        return prev;
-    });
-  };
-
-  const handleSendMessage = (participant1: string, participant2: string, newMessage: Omit<ChatMessage, 'id'>) => {
-    const conversationId = [participant1, participant2].sort().join('-');
-    setConversations(prev => {
-        const convoIndex = prev.findIndex(c => c.id === conversationId);
-        if (convoIndex > -1) {
-            const updatedConvo = { ...prev[convoIndex] };
-            updatedConvo.messages.push({ ...newMessage, id: Date.now() });
-            const newConversations = [...prev];
-            newConversations.splice(convoIndex, 1); // remove old
-            newConversations.unshift(updatedConvo); // add to front
-            return newConversations;
-        } else {
-            const newConversation: Conversation = {
-                id: conversationId,
-                participantNames: [participant1, participant2],
-                messages: [{ ...newMessage, id: Date.now() }],
-            };
-            return [newConversation, ...prev];
-        }
-    });
-  };
-
-    const handleSendAnnouncement = (message: string, classIds: string[]) => {
-        const newMessage: Omit<ChatMessage, 'id'> = {
-            text: message,
-            senderName: teacherProfile.name,
-            timestamp: new Date(),
-        };
-
-        const conversationIds = classIds.map(id => `class-${id}-announcements`);
-        
-        setConversations(prev => {
-            let newConversations = [...prev];
-            conversationIds.forEach(convoId => {
-                const convoIndex = newConversations.findIndex(c => c.id === convoId);
-                if (convoIndex > -1) {
-                    const updatedConvo = { 
-                        ...newConversations[convoIndex],
-                        messages: [...newConversations[convoIndex].messages, { ...newMessage, id: Date.now() + Math.random() }]
-                    };
-                    newConversations.splice(convoIndex, 1);
-                    newConversations.unshift(updatedConvo);
-                }
-            });
-            return newConversations;
-        });
-    };
-
+  // Reports (start empty)
   const [reportsData, setReportsData] = usePersistentState('sciquest_reportsData', {
-      singleQuizStudentScores: singleQuizScores.map(({ name, quizNumber, score, classId }) => ({ name, quizNumber, score, classId })),
-      allQuizzesStudentScores: allQuizzesScores,
+    singleQuizStudentScores: [] as { name: string; quizNumber: number | string; score: string; classId: string }[],
+    allQuizzesStudentScores: [] as { name: string; average: number; classId: string }[],
   });
 
-  // Calculate initial student profile stats on load
+  /** --------------------
+   *  Theme toggle
+   * -------------------- */
   useEffect(() => {
-    updateStudentStats(studentDoneQuizzes, studentProfile);
-  }, []); // Run only once on initial load
-
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (isDarkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [isDarkMode]);
 
+  /** --------------------
+   *  Data loading (server)
+   * -------------------- */
   useEffect(() => {
-    const checkOverdueQuizzes = () => {
-        const now = new Date();
-        
-        setStudentNewQuizzes(currentNewQuizzes => {
-            const overdueQuizzes = currentNewQuizzes.filter(quiz => quiz.dueDate && new Date(quiz.dueDate) < now);
+    const me = getCurrentUser();
+    loadClasses();
+    loadClassRosters().then((rosters) => {
+      if (me?.id) {
+        const joined = Object.entries(rosters)
+          .filter(([classId, students]) => students.some(s => String((s as any).studentId || s.name || s.id) === String(me.id)))
+          .map(([classId]) => classId);
+        setStudentJoinedClassIds(joined);
+      }
+    });
+    loadTeacherQuizzes();
 
-            if (overdueQuizzes.length > 0) {
-                const overdueIds = new Set(overdueQuizzes.map(q => q.id));
-                const remainingNewQuizzes = currentNewQuizzes.filter(quiz => !overdueIds.has(quiz.id));
-                
-                setStudentMissedQuizzes(prevMissed => {
-                    const existingMissedIds = new Set(prevMissed.map(q => q.id));
-                    const trulyNewMissedQuizzes = overdueQuizzes.filter(q => !existingMissedIds.has(q.id));
-                    return [...prevMissed, ...trulyNewMissedQuizzes];
-                });
-                return remainingNewQuizzes;
-            }
-            
-            return currentNewQuizzes; // No changes
-        });
-    };
+    if (me?.id) {
+      loadStudentQuizzesBuckets(me.id);
+      loadSubmissionsAndUpdateDone(me.id);
+    } else {
+      setStudentNewQuizzes([]);
+      setStudentMissedQuizzes([]);
+      setStudentDoneQuizzes([]);
+      setStudentJoinedClassIds([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
-    // Check every 5 seconds for demonstration purposes. A real app might do this differently.
-    const interval = setInterval(checkOverdueQuizzes, 5000);
+  /** --------------------
+   *  API Calls
+   * -------------------- */
+  async function loadClasses() {
+    try {
+      const res = await fetch(`${API_URL}/api/classes`);
+      if (!res.ok) throw new Error('Failed to load classes');
+      const items = await res.json();
+      const mapped: ClassData[] = (items || []).map((c: any) => ({
+        id: String(c.id),
+        name: c.name || '',
+        section: c.section || '',
+        code: c.code || '',
+        studentCount: Number(c.studentCount || 0),
+      }));
+      setClasses(mapped);
+    } catch (e) {
+      console.error(e);
+      setClasses([]);
+    }
+  }
 
-    return () => clearInterval(interval);
-  }, []); // Run only once to set up the interval.
+  async function loadClassRosters() {
+    try {
+      const res = await fetch(`${API_URL}/api/class-students`);
+      if (!res.ok) throw new Error('Failed to load class-students');
+      const items: Array<{ id: string; classId: string; studentId: string; joinedAt?: string }> = await res.json();
 
+      const byClass: Record<string, ClassStudent[]> = {};
+      for (const r of items || []) {
+        const key = String(r.classId);
+        if (!byClass[key]) byClass[key] = [];
+        byClass[key].push({
+          id: r.id,
+          name: r.studentId,
+          level: 1,
+          streak: 0,
+          accuracy: '0%',
+          lastActive: '—',
+        } as any);
+      }
+
+      setClassRosters(byClass);
+      return byClass;
+    } catch (e) {
+      console.error(e);
+      const empty: Record<string, ClassStudent[]> = {};
+      setClassRosters(empty);
+      return empty;
+    }
+  }
+
+  async function loadTeacherQuizzes() {
+    try {
+      const d = await fetch(`${API_URL}/api/quizzes?status=draft`);
+      const drafts: ServerQuizSummary[] = d.ok ? await d.json() : [];
+      const p = await fetch(`${API_URL}/api/quizzes?status=posted`);
+      const posted: ServerQuizSummary[] = p.ok ? await p.json() : [];
+
+      const mapToTeacherQuiz = (q: ServerQuizSummary): TeacherQuiz => ({
+        id: typeof q.id === 'string' ? (Number.isNaN(Number(q.id)) ? Date.now() : Number(q.id)) : Number(q.id),
+        title: q.title as any,
+        type: q.type,
+        mode: q.mode,
+        status: q.status,
+        questions: [],
+        dueDate: q.dueDate || undefined,
+        postedToClasses: (q.classIds || []).map(cid => {
+          const cls = classes.find(c => String(c.id) === String(cid));
+          return { id: String(cid), name: cls?.name || '', section: cls?.section || '' };
+        }),
+      });
+
+      setDraftQuizzes((drafts || []).map(mapToTeacherQuiz));
+      setPostedQuizzes((posted || []).map(mapToTeacherQuiz));
+    } catch (e) {
+      console.error(e);
+      setDraftQuizzes([]);
+      setPostedQuizzes([]);
+    }
+  }
+
+  async function loadStudentQuizzesBuckets(studentId: string) {
+    try {
+      const rosterRes = await fetch(`${API_URL}/api/class-students?studentId=${encodeURIComponent(studentId)}`);
+      const roster: Array<{ classId: string }> = rosterRes.ok ? await rosterRes.json() : [];
+      const classIds = uniq((roster || []).map(r => String(r.classId)));
+      setStudentJoinedClassIds(classIds);
+
+      // 👇 if you add classId filtering in your endpoint, you can call it once
+      const qRes = await fetch(`${API_URL}/api/quizzes?status=posted`);
+      const postedAll: ServerQuizSummary[] = qRes.ok ? await qRes.json() : [];
+      const posted = postedAll.filter(q => (q.classIds || []).some(cid => classIds.includes(String(cid))));
+
+      const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(studentId)}`);
+      const submissions: ServerSubmission[] = sRes.ok ? await sRes.json() : [];
+      const subByQuiz = new Map(submissions.map(s => [String(s.quizId), s]));
+
+      const now = Date.now();
+      const toClientQuiz = (q: ServerQuizSummary): Quiz => ({
+        id: q.id as any,
+        topic: q.title as any,
+        subpart: q.type,
+        questions: (q.questions || []).map(it => ({
+          id: Number(it.id),
+          type: 'multiple-choice',
+          question: '',
+          options: [],
+          answer: '',
+          points: Number(it.points) || 1,
+        })),
+        dueDate: q.dueDate || undefined,
+        mode: q.mode,
+      });
+
+      const newQs: Quiz[] = [];
+      const missedQs: Quiz[] = [];
+      const doneQs: DoneQuiz[] = [];
+
+      for (const q of posted) {
+        const sub = subByQuiz.get(String(q.id));
+        if (sub) {
+          doneQs.push({ ...toClientQuiz(q), score: '0/0', questionResults: [] });
+          continue;
+        }
+        const dueMs = q.dueDate ? new Date(q.dueDate).getTime() : undefined;
+        if (dueMs && dueMs < now) missedQs.push(toClientQuiz(q));
+        else newQs.push(toClientQuiz(q));
+      }
+
+      const sortByDue = (a: Quiz, b: Quiz) =>
+        (new Date(b.dueDate || 0).getTime()) - (new Date(a.dueDate || 0).getTime());
+      newQs.sort(sortByDue);
+      missedQs.sort(sortByDue);
+
+      setStudentNewQuizzes(newQs);
+      setStudentMissedQuizzes(missedQs);
+      setStudentDoneQuizzes(doneQs);
+    } catch (e) {
+      console.error(e);
+      setStudentNewQuizzes([]);
+      setStudentMissedQuizzes([]);
+      setStudentDoneQuizzes([]);
+    }
+  }
+
+  async function loadSubmissionsAndUpdateDone(studentId: string) {
+    try {
+      const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(studentId)}`);
+      if (!sRes.ok) return;
+      const subs: ServerSubmission[] = await sRes.json();
+      if (!subs?.length) return;
+      // merge if needed
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  /** --------------------
+   *  Quiz Posting actions (teacher)
+   * -------------------- */
+  const handlePostQuiz = async (details: { quizId: number; dueDate: string; classIds: string[] }) => {
+    try {
+      const res = await fetch(`${API_URL}/api/quizzes/${details.quizId}/post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classIds: details.classIds, dueDate: details.dueDate }),
+      });
+      if (!res.ok) throw new Error('Failed to post quiz');
+      await loadTeacherQuizzes();
+
+      const me = getCurrentUser();
+      if (me?.id) await loadStudentQuizzesBuckets(me.id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUnpostQuiz = async (quizId: number) => {
+    try {
+      const res = await fetch(`${API_URL}/api/quizzes/${quizId}/unpost`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to unpost quiz');
+      await loadTeacherQuizzes();
+
+      const me = getCurrentUser();
+      if (me?.id) await loadStudentQuizzesBuckets(me.id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  /** --------------------
+   *  Student quiz completion
+   * -------------------- */
   const updateStudentStats = (allDoneQuizzes: DoneQuiz[], currentProfile: ProfileData) => {
-    // Calculate XP and Level
     let totalPoints = 0;
     allDoneQuizzes.forEach(quiz => {
-        const parts = quiz.score.split('/');
-        if (parts.length === 2) {
-            totalPoints += parseInt(parts[0], 10) || 0;
-        }
+      const parts = quiz.score.split('/');
+      if (parts.length === 2) totalPoints += parseInt(parts[0], 10) || 0;
     });
     const xp = totalPoints * 10;
     const level = Math.floor(xp / xpPerLevel) + 1;
 
-    // Calculate Accuracy
     let totalScore = 0;
     let totalPossible = 0;
     allDoneQuizzes.forEach(quiz => {
-        const parts = quiz.score.split('/');
-        if (parts.length === 2) {
-            totalScore += parseInt(parts[0], 10) || 0;
-            totalPossible += parseInt(parts[1], 10) || 0;
-        }
+      const [s, p] = quiz.score.split('/');
+      totalScore += parseInt(s, 10) || 0;
+      totalPossible += parseInt(p, 10) || 0;
     });
     const accuracy = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
 
-    // Calculate Streaks (perfect scores)
-    const streaks = allDoneQuizzes.reduce((count, quiz) => {
-        const parts = quiz.score.split('/');
-        if (parts.length === 2) {
-            const score = parseInt(parts[0], 10);
-            const total = parseInt(parts[1], 10);
-            if (!isNaN(score) && !isNaN(total) && total > 0 && score === total) {
-                return count + 1;
-            }
-        }
-        return count;
+    const streaks = allDoneQuizzes.reduce((count, q) => {
+      const [s, p] = q.score.split('/');
+      const si = parseInt(s, 10);
+      const pi = parseInt(p, 10);
+      return count + (pi > 0 && si === pi ? 1 : 0);
     }, 0);
 
     const newProfile = { ...currentProfile, xp, level, accuracy, streaks };
@@ -311,217 +388,203 @@ const App: React.FC = () => {
     return newProfile;
   };
 
-  const handleCreateClass = (className: string, section: string, classCode: string) => {
-    const newClass: ClassData = { id: new Date().toISOString(), name: className, section, code: classCode, studentCount: 0 };
-    setClasses(prev => [...prev, newClass]);
+  const checkAndAwardBadges = (completedQuiz: DoneQuiz, allDoneQuizzes: DoneQuiz[]): { updatedBadgeProgress: BadgeCategory[]; newlyEarnedBadges: Badge[] } => {
+    const newlyEarnedBadges: Badge[] = [];
+    const updatedBadgeProgress = JSON.parse(JSON.stringify(badgeProgress));
+    const allCompleted = [...allDoneQuizzes, completedQuiz];
 
-    const newConversation: Conversation = {
-        id: `class-${newClass.id}-announcements`,
-        title: `${newClass.name} - ${newClass.section}`,
-        participantNames: [teacherProfile.name],
-        messages: [],
-    };
-    setConversations(prev => [newConversation, ...prev]);
+    updatedBadgeProgress.find((c: BadgeCategory) => c.id === 'quiz_milestone')?.badges.forEach((badge: Badge) => {
+      const wasEarned = badge.progress >= badge.goal;
+      badge.progress = allCompleted.length;
+      if (!wasEarned && badge.progress >= badge.goal) newlyEarnedBadges.push(badge);
+    });
+
+    updatedBadgeProgress.find((c: BadgeCategory) => c.id === 'perfect_score')?.badges.forEach((badge: Badge) => {
+      const wasEarned = badge.progress >= badge.goal;
+      const perfectCount = allCompleted.filter(q => q.score.split('/')[0] === q.score.split('/')[1]).length;
+      badge.progress = perfectCount;
+      if (!wasEarned && badge.progress >= badge.goal) newlyEarnedBadges.push(badge);
+    });
+
+    return { updatedBadgeProgress, newlyEarnedBadges };
   };
 
-  const handleAddStudentToClass = (classId: string, studentProfile: ProfileData) => {
-      const newStudent: ClassStudent = {
-          id: Date.now(), name: studentProfile.name, level: studentProfile.level,
-          streak: 0, accuracy: '0%', lastActive: t('today'),
-      };
-      setClassRosters(prev => ({ ...prev, [classId]: [...(prev[classId] || []), newStudent] }));
-      setClasses(prev => prev.map(c => c.id === classId ? { ...c, studentCount: c.studentCount + 1 } : c));
-      setStudentJoinedClassIds(prev => prev.includes(classId) ? prev : [...prev, classId]);
-      
-      const conversationId = `class-${classId}-announcements`;
-      setConversations(prev => prev.map(convo => {
-          if (convo.id === conversationId && !convo.participantNames.includes(studentProfile.name)) {
-              return {
-                  ...convo,
-                  participantNames: [...convo.participantNames, studentProfile.name]
-              };
-          }
-          return convo;
-      }));
-  };
+  const handleQuizComplete = async (quizId: number | string, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[]) => {
+    const quiz = [...studentNewQuizzes, ...studentMissedQuizzes].find(q => String(q.id) === String(quizId));
+    if (!quiz || !quiz.questions) {
+      setTakingQuizId(null);
+      setTakingTeam(undefined);
+      return;
+    }
 
-    const handleSaveDraftQuiz = (newQuiz: Omit<TeacherQuiz, 'id' | 'status'>, questions?: Question[]) => {
-        const quizToAdd: TeacherQuiz = { ...newQuiz, id: Date.now(), status: 'draft', questions: questions || [] };
-        setDraftQuizzes(prev => [...prev, quizToAdd]);
-    };
+    let score = 0;
+    results.forEach(result => {
+      if (result.wasCorrect) {
+        const question = quiz.questions!.find(q => q.id === result.questionId);
+        if (question) score += question.points;
+      }
+    });
+    const totalPoints = quiz.questions.reduce((sum, q) => sum + q.points, 0);
+    const newDoneQuiz: DoneQuiz = { ...quiz, score: `${score}/${totalPoints}` };
 
-    const handleUpdateDraftQuiz = (updatedQuiz: TeacherQuiz) => {
-        setDraftQuizzes(prev => prev.map(q => q.id === updatedQuiz.id ? updatedQuiz : q));
-    };
+    if (quiz.mode === 'Team' && teamMembers?.length) {
+      const resultsMap = new Map(results.map(r => [r.questionId, r.wasCorrect]));
+      newDoneQuiz.questionResults = quiz.questions.map((question, index) => ({
+        questionId: question.id,
+        wasCorrect: resultsMap.get(question.id) || false,
+        studentName: teamMembers[index % teamMembers.length],
+      })) as unknown as QuestionResult[];
+    } else {
+      newDoneQuiz.questionResults = results as QuestionResult[];
+    }
 
-    const handleDeleteDraftQuiz = (quizId: number) => {
-        setDraftQuizzes(prev => prev.filter(q => q.id !== quizId));
-    };
+    const updatedDoneQuizzes = [newDoneQuiz, ...studentDoneQuizzes];
 
-    const handlePostQuiz = (details: { quizId: number; dueDate: string; classIds: string[] }) => {
-        const quiz = draftQuizzes.find(q => q.id === details.quizId);
-        if (quiz) {
-            setDraftQuizzes(prev => prev.filter(q => q.id !== quiz.id));
-            const postedClassesInfo = classes.filter(c => details.classIds.includes(c.id)).map(c => ({ id: c.id, name: c.name, section: c.section }));
-            setPostedQuizzes(prev => [...prev, { ...quiz, status: 'posted', dueDate: details.dueDate, postedToClasses: postedClassesInfo }]);
-            if (details.classIds.some(id => studentJoinedClassIds.includes(id))) {
-                const newStudentQuiz: Quiz = { id: quiz.id, topic: quiz.title, subpart: quiz.type, questions: quiz.questions, dueDate: details.dueDate, mode: quiz.mode };
-                setStudentNewQuizzes(prev => prev.some(q => q.id === newStudentQuiz.id) ? prev : [newStudentQuiz, ...prev]);
-            }
+    const { updatedBadgeProgress, newlyEarnedBadges } = checkAndAwardBadges(newDoneQuiz, studentDoneQuizzes);
+    setBadgeProgress(updatedBadgeProgress);
+    setLastCompletedQuizStats({ quiz: newDoneQuiz, earnedBadges: newlyEarnedBadges });
+
+    setStudentNewQuizzes(prev => prev.filter(q => String(q.id) !== String(quizId)));
+    setStudentMissedQuizzes(prev => prev.filter(q => String(q.id) !== String(quizId)));
+    setStudentDoneQuizzes(updatedDoneQuizzes);
+
+    const newProfile = updateStudentStats(updatedDoneQuizzes, studentProfile);
+
+    setClassRosters(prevRosters => {
+      const me = getCurrentUser();
+      if (!me?.id) return prevRosters;
+
+      const newR = { ...prevRosters };
+      studentJoinedClassIds.forEach(classId => {
+        if (newR[classId]) {
+          newR[classId] = newR[classId].map(stu =>
+            (stu.name === newProfile.name || String((stu as any).id) === String(me.id))
+              ? { ...stu, level: newProfile.level, streak: newProfile.streaks, accuracy: `${newProfile.accuracy}%`, lastActive: t('today') }
+              : stu
+          );
         }
-    };
-
-    const handleUnpostQuiz = (quizId: number) => {
-        const quiz = postedQuizzes.find(q => q.id === quizId);
-        if (quiz) {
-            setPostedQuizzes(prev => prev.filter(q => q.id !== quizId));
-            const { dueDate, postedToClasses, ...restOfQuiz } = quiz;
-            setDraftQuizzes(prev => [...prev, { ...restOfQuiz, status: 'draft' }]);
-        }
-    };
-    
-    const checkAndAwardBadges = (completedQuiz: DoneQuiz, allDoneQuizzes: DoneQuiz[]): { updatedBadgeProgress: BadgeCategory[]; newlyEarnedBadges: Badge[] } => {
-      const newlyEarnedBadges: Badge[] = [];
-      const updatedBadgeProgress = JSON.parse(JSON.stringify(badgeProgress));
-      const allCompleted = [...allDoneQuizzes, completedQuiz];
-      
-      updatedBadgeProgress.find((c: BadgeCategory) => c.id === 'quiz_milestone')?.badges.forEach((badge: Badge) => {
-          const wasEarned = badge.progress >= badge.goal;
-          badge.progress = allCompleted.length;
-          if (!wasEarned && badge.progress >= badge.goal) newlyEarnedBadges.push(badge);
       });
-  
-      updatedBadgeProgress.find((c: BadgeCategory) => c.id === 'perfect_score')?.badges.forEach((badge: Badge) => {
-          const wasEarned = badge.progress >= badge.goal;
-          const perfectCount = allCompleted.filter(q => q.score.split('/')[0] === q.score.split('/')[1]).length;
-          badge.progress = perfectCount;
-          if (!wasEarned && badge.progress >= badge.goal) newlyEarnedBadges.push(badge);
-      });
-  
-      return { updatedBadgeProgress, newlyEarnedBadges };
-    };
+      return newR;
+    });
 
-    const handleQuizComplete = (quizId: number, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[]) => {
-      const quiz = [...studentNewQuizzes, ...studentMissedQuizzes].find(q => q.id === quizId);
-      if (!quiz || !quiz.questions) return;
+    // (Optional) POST submission to server here
 
-      let score = 0;
-      results.forEach(result => {
-          if (result.wasCorrect) {
-              const question = quiz.questions!.find(q => q.id === result.questionId);
-              if (question) {
-                  score += question.points;
-              }
-          }
-      });
-      const totalPoints = quiz.questions.reduce((sum, q) => sum + q.points, 0);
+    setReportsData(prev => {
+      const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
+      const studentName = newProfile.name;
+      const currentClassId = studentJoinedClassIds[0];
 
-      const newDoneQuiz: DoneQuiz = { ...quiz, score: `${score}/${totalPoints}` };
-
-      if (quiz.mode === 'Team' && teamMembers && teamMembers.length > 0) {
-          const resultsMap = new Map(results.map(r => [r.questionId, r.wasCorrect]));
-          newDoneQuiz.questionResults = quiz.questions.map((question, index) => ({
-              questionId: question.id,
-              wasCorrect: resultsMap.get(question.id) || false,
-              studentName: teamMembers[index % teamMembers.length],
-          }));
-      } else {
-          newDoneQuiz.questionResults = results;
+      const newSingleScores = [...prev.singleQuizStudentScores];
+      const existingIdx = newSingleScores.findIndex(s => s.name === studentName && String(s.quizNumber) === String(quizId));
+      if (existingIdx > -1) {
+        newSingleScores[existingIdx] = { ...newSingleScores[existingIdx], score: `${percentage}%` };
+      } else if (currentClassId) {
+        newSingleScores.push({ name: studentName, quizNumber: quizId, score: `${percentage}%`, classId: currentClassId });
       }
 
-      const updatedDoneQuizzes = [newDoneQuiz, ...studentDoneQuizzes];
-      
-      // Update badge progress
-      const { updatedBadgeProgress, newlyEarnedBadges } = checkAndAwardBadges(newDoneQuiz, studentDoneQuizzes);
-      setBadgeProgress(updatedBadgeProgress);
-      setLastCompletedQuizStats({ quiz: newDoneQuiz, earnedBadges: newlyEarnedBadges });
-      
-      // Update student's quiz lists
-      setStudentNewQuizzes(prev => prev.filter(q => q.id !== quizId));
-      setStudentDoneQuizzes(updatedDoneQuizzes);
-      
-      // Update student profile (XP, level, accuracy, streaks)
-      const newProfile = updateStudentStats(updatedDoneQuizzes, studentProfile);
-      
-      // Update teacher-side class roster
-      setClassRosters(prevRosters => {
-          const newRosters = { ...prevRosters };
-          studentJoinedClassIds.forEach(classId => {
-              if (newRosters[classId]) {
-                  newRosters[classId] = newRosters[classId].map(student => 
-                      student.name === newProfile.name
-                          ? { ...student, level: newProfile.level, streak: newProfile.streaks, accuracy: `${newProfile.accuracy}%`, lastActive: t('today') }
-                          : student
-                  );
-              }
+      const newAllScores = [...prev.allQuizzesStudentScores];
+      const idx2 = newAllScores.findIndex(s => s.name === studentName);
+      if (idx2 > -1) newAllScores[idx2] = { ...newAllScores[idx2], average: newProfile.accuracy };
+      else if (currentClassId) newAllScores.push({ name: studentName, average: newProfile.accuracy, classId: currentClassId });
+
+      return { singleQuizStudentScores: newSingleScores, allQuizzesStudentScores: newAllScores };
+    });
+
+    // 🔧 close taking view
+    setTakingQuizId(null);
+    setTakingTeam(undefined);
+  };
+
+  /** --------------------
+   *  Messaging helpers
+   * -------------------- */
+  const handleSendMessageToConversation = (conversationId: string, newMessage: Omit<{ id: number; text: string; senderName: string; timestamp: Date }, 'id'>) => {
+    setConversations(prev => {
+      const i = prev.findIndex(c => c.id === conversationId);
+      if (i > -1) {
+        const updated = { ...prev[i] };
+        updated.messages.push({ ...newMessage, id: Date.now() });
+        const next = [...prev];
+        next.splice(i, 1);
+        next.unshift(updated);
+        return next;
+      }
+      return prev;
+    });
+  };
+
+  const handleSendMessage = (participant1: string, participant2: string, newMessage: Omit<{ id: number; text: string; senderName: string; timestamp: Date }, 'id'>) => {
+    const conversationId = [participant1, participant2].sort().join('-');
+    setConversations(prev => {
+      const i = prev.findIndex(c => c.id === conversationId);
+      if (i > -1) {
+        const updated = { ...prev[i] };
+        updated.messages.push({ ...newMessage, id: Date.now() });
+        const next = [...prev];
+        next.splice(i, 1);
+        next.unshift(updated);
+        return next;
+      } else {
+        const newConvo = { id: conversationId, participantNames: [participant1, participant2], messages: [{ ...newMessage, id: Date.now() }] };
+        return [newConvo, ...prev];
+      }
+    });
+  };
+
+  const handleSendAnnouncement = (message: string, classIds: string[]) => {
+    const newMessage = { text: message, senderName: teacherProfile.name, timestamp: new Date() };
+    const conversationIds = classIds.map(id => `class-${id}-announcements`);
+    setConversations(prev => {
+      let next = [...prev];
+      conversationIds.forEach(cid => {
+        const i = next.findIndex(c => c.id === cid);
+        if (i > -1) {
+          const updated = { ...next[i] };
+          updated.messages = [...updated.messages, { ...newMessage, id: Date.now() + Math.random() }];
+          next.splice(i, 1);
+          next.unshift(updated);
+        } else {
+          next.unshift({
+            id: cid,
+            title: `${classes.find(c => c.id === cid)?.name || 'Class'} - ${classes.find(c => c.id === cid)?.section || ''}`,
+            participantNames: [teacherProfile.name],
+            messages: [{ ...newMessage, id: Date.now() + Math.random() }],
           });
-          return newRosters;
+        }
       });
-      
-      // Update reports data
-      setReportsData(prev => {
-          const percentage = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
-          const studentName = newProfile.name;
-          const currentClassId = studentJoinedClassIds.length > 0 ? studentJoinedClassIds[0] : undefined;
-
-          // Update single quiz scores
-          const newSingleScores = [...prev.singleQuizStudentScores];
-          const existingScoreIndex = newSingleScores.findIndex(s => s.name === studentName && s.quizNumber === quizId);
-
-          if (existingScoreIndex > -1) {
-              newSingleScores[existingScoreIndex] = { ...newSingleScores[existingScoreIndex], score: `${percentage}%` };
-          } else if (currentClassId) {
-              newSingleScores.push({
-                  name: studentName,
-                  quizNumber: quizId,
-                  score: `${percentage}%`,
-                  classId: currentClassId,
-              });
-          }
-
-          // Update all quizzes (overall) scores
-          const newAllScores = [...prev.allQuizzesStudentScores];
-          const studentInAllScoresIndex = newAllScores.findIndex(s => s.name === studentName);
-
-          if (studentInAllScoresIndex > -1) {
-              newAllScores[studentInAllScoresIndex] = { ...newAllScores[studentInAllScoresIndex], average: newProfile.accuracy };
-          } else if (currentClassId) {
-              newAllScores.push({
-                  name: studentName,
-                  average: newProfile.accuracy,
-                  classId: currentClassId,
-              });
-          }
-          
-          return { singleQuizStudentScores: newSingleScores, allQuizzesStudentScores: newAllScores };
-      });
-
-      setTakingQuiz(null);
-    };
-
-  const handleSaveStudentProfile = (newProfile: Partial<ProfileData>) => {
-    setStudentProfile(prev => ({ ...prev, ...newProfile }));
-  };
-  
-  const handleSaveTeacherProfile = (newProfile: Partial<TeacherProfileData>) => {
-      setTeacherProfile(prev => ({ ...prev, ...newProfile }));
+      return next;
+    });
   };
 
-  const handleStudentAccountCreate = (username: string) => {
-    setStudentProfile(prev => ({ ...prev, name: username, bio: 'New SciQuest Explorer!' }));
-    setView('verifyAccount');
-  };
-  
-  const handleTeacherAccountCreate = (username: string) => {
-    setTeacherProfile(prev => ({ ...prev, name: username, motto: 'New SciQuest Educator!' }));
-    setView('verifyAccount');
-  };
-
+  /** --------------------
+   *  Auth / nav handlers
+   * -------------------- */
+  const handleSaveStudentProfile = (newProfile: Partial<ProfileData>) => setStudentProfile(prev => ({ ...prev, ...newProfile }));
+  const handleSaveTeacherProfile = (newProfile: Partial<TeacherProfileData>) => setTeacherProfile(prev => ({ ...prev, ...newProfile }));
+  const handleStudentAccountCreate = (username: string) => { setStudentProfile(prev => ({ ...prev, name: username, bio: 'New SciQuest Explorer!' })); setView('verifyAccount'); };
+  const handleTeacherAccountCreate = (username: string) => { setTeacherProfile(prev => ({ ...prev, name: username, motto: 'New SciQuest Educator!' })); setView('verifyAccount'); };
   const handleBackToMain = () => setView('main');
   const handleLogin = () => { setView('studentDashboard'); setDashboardView('home'); };
   const handleTeacherLogin = () => setView('teacherDashboard');
   const handleAccountVerified = () => setView(authFlowReturnView);
-  const navigateToInfoScreen = (targetView: 'help' | 'aboutUs' | 'privacyPolicy') => { setInfoScreenReturnView(view); setView(targetView); };
+  const navigateToInfoScreen = (target: 'help' | 'aboutUs' | 'privacyPolicy') => { setInfoScreenReturnView(view); setView(target); };
+
+  // 🔧 Bridge from QuizzesScreen -> StudentDashboard -> App:
+  //    accept either (id) or (quizObject) to be robust
+  const handleTakeQuizInApp = (payload: any, team?: string[]) => {
+    const pickedId =
+      payload && typeof payload === 'object' ? payload.id :
+        payload ?? null;
+
+    console.log('[App] onTakeQuiz received id:', pickedId, 'raw:', payload);
+
+    if (!pickedId) {
+      console.error('[App] onTakeQuiz missing id!');
+      return;
+    }
+    setTakingQuizId(pickedId);
+    setTakingTeam(team);
+  };
 
   const renderLoginView = () => {
     switch (view) {
@@ -534,7 +597,8 @@ const App: React.FC = () => {
       case 'createAccount': return <CreateAccount onBack={() => setView(authFlowReturnView)} onAccountCreateSubmit={handleStudentAccountCreate} />;
       case 'createTeacherAccount': return <CreateTeacherAccount onBack={() => setView(authFlowReturnView)} onAccountCreateSubmit={handleTeacherAccountCreate} />;
       case 'verifyAccount': return <VerifyCode email="jhon***********@***.com" onSuccess={handleAccountVerified} />;
-      default: return (
+      default:
+        return (
           <>
             <SciQuestLogo />
             <p className="mt-2 text-gray-300 text-center">{t('learnPlayMaster')}</p>
@@ -552,74 +616,100 @@ const App: React.FC = () => {
         );
     }
   };
-  
-  const mainClasses = view === 'studentDashboard' || view === 'teacherDashboard' ? "min-h-screen w-full bg-gray-50 dark:bg-brand-deep-purple font-sans"
-    : view === 'help' || view === 'aboutUs' || view === 'privacyPolicy' ? "min-h-screen w-full bg-brand-deep-purple font-sans"
-    : "min-h-screen w-full bg-brand-deep-purple flex items-center justify-center p-4 font-sans";
+
+  const mainClasses =
+    view === 'studentDashboard' || view === 'teacherDashboard'
+      ? 'min-h-screen w-full bg-gray-50 dark:bg-brand-deep-purple font-sans'
+      : view === 'help' || view === 'aboutUs' || view === 'privacyPolicy'
+        ? 'min-h-screen w-full bg-brand-deep-purple font-sans'
+        : 'min-h-screen w-full bg-brand-deep-purple flex items-center justify-center p-4 font-sans';
 
   const handleSetAppView = (targetView: View) => {
-    if (['help', 'aboutUs', 'privacyPolicy'].includes(targetView)) {
-        navigateToInfoScreen(targetView as 'help' | 'aboutUs' | 'privacyPolicy');
-    } else {
-        setView(targetView);
-    }
+    if (['help', 'aboutUs', 'privacyPolicy'].includes(targetView)) navigateToInfoScreen(targetView as any);
+    else setView(targetView);
   };
 
   return (
     <main className={mainClasses}>
       {view === 'studentDashboard' ? (
-        <StudentDashboard 
-          activeView={dashboardView} 
-          setView={setDashboardView} 
-          setAppView={handleSetAppView}
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={() => setIsDarkMode(prev => !prev)}
-          classes={classes}
-          onAddStudentToClass={handleAddStudentToClass}
-          newQuizzes={studentNewQuizzes}
-          missedQuizzes={studentMissedQuizzes}
-          doneQuizzes={studentDoneQuizzes}
-          takingQuiz={takingQuiz}
-          onTakeQuiz={setTakingQuiz}
-          onQuizComplete={handleQuizComplete}
-          badgeProgress={badgeProgress}
-          lastCompletedQuizStats={lastCompletedQuizStats}
-          onDismissCompletionScreen={() => setLastCompletedQuizStats(null)}
-          profile={studentProfile}
-          onSaveProfile={handleSaveStudentProfile}
-          xpPerLevel={xpPerLevel}
-          reportsData={reportsData}
-          classRosters={classRosters}
-          studentJoinedClassIds={studentJoinedClassIds}
-          postedQuizzes={postedQuizzes}
-          teamsData={teamsData}
-          conversations={conversations}
-          onSendMessage={handleSendMessage}
-          onSendMessageToConversation={handleSendMessageToConversation}
-          teacherProfile={teacherProfile}
-        />
-      ) : view === 'teacherDashboard' ? (
-        <TeacherDashboard 
-            setAppView={handleSetAppView} 
+        // 🔧 If a quiz is currently selected, render the taking screen instead of the dashboard
+        takingQuizId ? (
+          <QuizTakingScreen
+            quizId={takingQuizId}
+            teamMembers={takingTeam}
+            onQuizComplete={handleQuizComplete}
+          />
+        ) : (
+          <StudentDashboard
+            activeView={dashboardView}
+            setView={setDashboardView}
+            setAppView={handleSetAppView}
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(prev => !prev)}
-            onSendAnnouncement={handleSendAnnouncement}
             classes={classes}
-            classRosters={classRosters}
-            onCreateClass={handleCreateClass}
-            draftQuizzes={draftQuizzes}
-            postedQuizzes={postedQuizzes}
-            onSaveDraftQuiz={handleSaveDraftQuiz}
-            onUpdateDraftQuiz={handleUpdateDraftQuiz}
-            onDeleteDraftQuiz={handleDeleteDraftQuiz}
-            onPostQuiz={handlePostQuiz}
-            onUnpostQuiz={handleUnpostQuiz}
+            onAddStudentToClass={(classId, prof) => {
+              // Optionally POST /api/class-students then reload:
+              loadClassRosters();
+            }}
+            newQuizzes={studentNewQuizzes}
+            missedQuizzes={studentMissedQuizzes}
+            doneQuizzes={studentDoneQuizzes}
+
+            // 🔧 wire the callback down so QuizzesScreen can call it
+            onTakeQuiz={handleTakeQuizInApp}
+
+            onQuizComplete={handleQuizComplete}
+            badgeProgress={badgeProgress}
+            lastCompletedQuizStats={lastCompletedQuizStats}
+            onDismissCompletionScreen={() => setLastCompletedQuizStats(null)}
+            profile={studentProfile}
+            onSaveProfile={profile => setStudentProfile(profile)}
+            xpPerLevel={xpPerLevel}
             reportsData={reportsData}
-            profile={teacherProfile}
-            onSaveProfile={handleSaveTeacherProfile}
+            classRosters={classRosters}
+            studentJoinedClassIds={studentJoinedClassIds}
+            postedQuizzes={postedQuizzes}
+            teamsData={{}}
             conversations={conversations}
             onSendMessage={handleSendMessage}
             onSendMessageToConversation={handleSendMessageToConversation}
+            teacherProfile={teacherProfile}
+          />
+        )
+      ) : view === 'teacherDashboard' ? (
+        <TeacherDashboard
+          setAppView={handleSetAppView}
+          isDarkMode={isDarkMode}
+          onToggleDarkMode={() => setIsDarkMode(prev => !prev)}
+          onSendAnnouncement={handleSendAnnouncement}
+          classes={classes}
+          classRosters={classRosters}
+          onCreateClass={(name, section, code) => {
+            // Optionally POST then reload:
+            loadClasses();
+          }}
+          draftQuizzes={draftQuizzes}
+          postedQuizzes={postedQuizzes}
+          onSaveDraftQuiz={(q, questions) => {
+            // Optionally POST then reload:
+            loadTeacherQuizzes();
+          }}
+          onUpdateDraftQuiz={(updated) => {
+            // Optionally PATCH then reload:
+            loadTeacherQuizzes();
+          }}
+          onDeleteDraftQuiz={(quizId) => {
+            // Optionally DELETE then reload:
+            loadTeacherQuizzes();
+          }}
+          onPostQuiz={handlePostQuiz}
+          onUnpostQuiz={handleUnpostQuiz}
+          reportsData={reportsData}
+          profile={teacherProfile}
+          onSaveProfile={handleSaveTeacherProfile}
+          conversations={conversations}
+          onSendMessage={handleSendMessage}
+          onSendMessageToConversation={handleSendMessageToConversation}
         />
       ) : view === 'help' ? (
         <HelpScreen onBack={() => setView(infoScreenReturnView)} />

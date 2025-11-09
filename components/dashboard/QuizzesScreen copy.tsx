@@ -3,9 +3,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { NewQuizIcon, MissedQuizIcon, DoneQuizzesIcon } from '../icons';
 import OutlineButton from '../OutlineButton';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../server/src/config'; // ✅ client-side config (NOT server config)
 
-// ---------- Minimal types ----------
+// ---------- Minimal types (align with your API) ----------
 type QuizMode = 'Solo' | 'Team' | 'Classroom';
 type QuizType = 'Card Game' | 'Board Game' | 'Normal';
 
@@ -16,31 +16,34 @@ export interface ServerQuiz {
   mode: QuizMode;
   status: 'draft' | 'posted';
   teacherId: string;
-  questions: Array<{ id: string | number; points: number }>;
-  classIds?: string[];
-  dueDate?: string;
+  questions: Array<{
+    id: string | number;
+    points: number;
+  }>;
+  classIds?: string[];   // when posted
+  dueDate?: string;      // ISO
 }
 
 export interface ServerSubmission {
   id: string;
   quizId: string | number;
   studentId: string;
-  score: number;
-  submittedAt: string;
+  score: number; // 0..100
+  submittedAt: string; // ISO
 }
 
 export interface ClientQuizNew {
   id: string | number;
-  topic: string;
-  subpart: string;
-  dueDate?: string;
+  topic: string;         // mapped from title
+  subpart: string;       // mode/type label
+  dueDate?: string;      // ISO
 }
 
 export interface ClientQuizDone extends ClientQuizNew {
-  score: string;
+  score: string;         // e.g. "87%"
 }
 
-// ---------- UI ----------
+// ---------- UI bits ----------
 interface FilterButtonProps {
   icon: React.ReactNode;
   label: string;
@@ -67,7 +70,11 @@ const formatPrettyDue = (iso?: string) => {
   try {
     const d = new Date(iso);
     return new Intl.DateTimeFormat('en-US', {
-      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
     }).format(d);
   } catch {
     return 'Invalid Date';
@@ -77,17 +84,13 @@ const formatPrettyDue = (iso?: string) => {
 const QuizItem: React.FC<{
   quiz: ClientQuizNew | ClientQuizDone;
   status: 'new' | 'missed' | 'done';
-  onTakeQuiz?: (quizId: string | number) => void;
+  onTakeQuiz?: (quiz: ClientQuizNew) => void;
   onViewDetails?: (quiz: ClientQuizDone) => void;
 }> = ({ quiz, status, onTakeQuiz, onViewDetails }) => {
   const { t } = useTranslations();
 
   const take = () => {
-    console.log('[QuizItem] Take clicked for quiz:', quiz);
-    if (status === 'new' && onTakeQuiz) {
-      console.log('[QuizItem] Calling onTakeQuiz with id:', (quiz as any).id);
-      onTakeQuiz((quiz as any).id);
-    }
+    if (status === 'new' && onTakeQuiz) onTakeQuiz(quiz as ClientQuizNew);
   };
   const view = () => {
     if (status === 'done' && onViewDetails) onViewDetails(quiz as ClientQuizDone);
@@ -108,7 +111,10 @@ const QuizItem: React.FC<{
 
         {status === 'missed' && (
           <div className="w-24 flex-shrink-0">
-            <button className="w-full bg-transparent border border-red-500 text-red-500 font-semibold py-1 px-3 rounded-lg text-sm cursor-default" disabled>
+            <button
+              className="w-full bg-transparent border border-red-500 text-red-500 font-semibold py-1 px-3 rounded-lg text-sm cursor-default"
+              disabled
+            >
               {t('missed')}
             </button>
           </div>
@@ -135,7 +141,7 @@ const QuizItem: React.FC<{
 
 // ---------- Component ----------
 interface QuizzesScreenProps {
-  onTakeQuiz: (quizId: string | number) => void;
+  onTakeQuiz: (quiz: ClientQuizNew) => void;
   onViewDetails: (quiz: ClientQuizDone) => void;
 }
 
@@ -150,17 +156,17 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
   const [missedQuizzes, setMissedQuizzes] = useState<ClientQuizNew[]>([]);
   const [doneQuizzes, setDoneQuizzes] = useState<ClientQuizDone[]>([]);
 
+  // ---- helpers to read current student ----
   const getCurrentStudent = () => {
     try {
       const raw = localStorage.getItem('currentUser');
-      const me = raw ? JSON.parse(raw) : null;
-      console.log('[QuizzesScreen] currentUser from localStorage:', me);
-      return me;
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   };
 
+  // ---- data loading pipeline ----
   useEffect(() => {
     const load = async () => {
       try {
@@ -171,27 +177,35 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
         if (!me) throw new Error('Please log in.');
         const studentId: string = String(me.id || me.email || me.name || 'student');
 
+        // 1) Which classes has this student joined?
+        //    GET /api/class-students?studentId=...
         const rosterRes = await fetch(`${API_URL}/api/class-students?studentId=${encodeURIComponent(studentId)}`);
         if (!rosterRes.ok) throw new Error('Failed to load class roster');
         const roster: Array<{ classId: string }> = await rosterRes.json();
-        console.log('[QuizzesScreen] roster:', roster);
         const classIds = Array.from(new Set((roster || []).map(r => String(r.classId))));
-        console.log('[QuizzesScreen] classIds:', classIds);
 
-        const qRes = await fetch(`${API_URL}/api/quizzes?status=posted&classId=${encodeURIComponent(classIds.join(','))}`);
+        // 2) Load ALL posted quizzes, then filter by classIds
+        //    (If your /api/quizzes supports ?status=posted&classId=..., you can query per class)
+        const qRes = await fetch(`${API_URL}/api/quizzes?status=posted`);
         if (!qRes.ok) throw new Error('Failed to load quizzes');
         const allPosted: ServerQuiz[] = await qRes.json();
-        console.log('[QuizzesScreen] fetched posted quizzes:', allPosted);
 
+        const scoped = (allPosted || []).filter(q =>
+          Array.isArray(q.classIds) ? q.classIds.some(cid => classIds.includes(String(cid))) : false
+        );
+
+        // 3) Load this student's submissions to determine "done"
+        //    GET /api/submissions?studentId=...
         const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(studentId)}`);
         if (!sRes.ok) throw new Error('Failed to load submissions');
         const submissions: ServerSubmission[] = await sRes.json();
-        console.log('[QuizzesScreen] submissions:', submissions);
 
+        // 4) Build maps for quick checks
         const subByQuizId = new Map<string | number, ServerSubmission>();
         submissions.forEach(s => subByQuizId.set(s.quizId, s));
 
         const now = Date.now();
+
         const toClient = (q: ServerQuiz): ClientQuizNew => ({
           id: q.id,
           topic: q.title,
@@ -203,33 +217,43 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
         const _missed: ClientQuizNew[] = [];
         const _done: ClientQuizDone[] = [];
 
-        for (const q of allPosted) {
+        for (const q of scoped) {
           const sub = subByQuizId.get(q.id);
+
           if (sub) {
-            _done.push({ ...toClient(q), score: `${Math.round(sub.score)}%` });
+            _done.push({
+              ...toClient(q),
+              score: `${Math.round(sub.score)}%`,
+            });
             continue;
           }
+
           const dueMs = q.dueDate ? new Date(q.dueDate).getTime() : undefined;
-          if (dueMs && dueMs < now) _missed.push(toClient(q));
-          else _new.push(toClient(q));
+          if (dueMs && dueMs < now) {
+            _missed.push(toClient(q));
+          } else {
+            _new.push(toClient(q));
+          }
         }
 
+        // sort lists by due date desc (newest first), done by submittedAt desc if available
         const byDueDesc = (a: ClientQuizNew, b: ClientQuizNew) =>
           (new Date(b.dueDate || 0).getTime()) - (new Date(a.dueDate || 0).getTime());
-        _new.sort(byDueDesc); _missed.sort(byDueDesc);
+
+        _new.sort(byDueDesc);
+        _missed.sort(byDueDesc);
         _done.sort((a, b) => (new Date(b.dueDate || 0).getTime()) - (new Date(a.dueDate || 0).getTime()));
 
         setNewQuizzes(_new);
         setMissedQuizzes(_missed);
         setDoneQuizzes(_done);
-
-        console.log('[QuizzesScreen] lists → new/missed/done:', _new, '\n', _missed, '\n', _done);
       } catch (e: any) {
         setErr(e?.message || 'Failed to load quizzes');
       } finally {
         setLoading(false);
       }
     };
+
     load();
   }, []);
 
@@ -242,17 +266,27 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
     }
   }, [activeFilter, newQuizzes, missedQuizzes, doneQuizzes]);
 
-  const handleTake = (quizId: string | number) => {
-    console.log('[QuizzesScreen] Passing quizId to parent:', quizId);
-    onTakeQuiz(quizId);
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex justify-around">
-        <FilterButton icon={<NewQuizIcon isActive={activeFilter === 'new'} />} label={t('newQuiz')} isActive={activeFilter === 'new'} onClick={() => setActiveFilter('new')} />
-        <FilterButton icon={<MissedQuizIcon isActive={activeFilter === 'missed'} />} label={t('missedQuiz')} isActive={activeFilter === 'missed'} onClick={() => setActiveFilter('missed')} />
-        <FilterButton icon={<DoneQuizzesIcon isActive={activeFilter === 'done'} />} label={t('doneQuizzes')} isActive={activeFilter === 'done'} onClick={() => setActiveFilter('done')} />
+        <FilterButton
+          icon={<NewQuizIcon isActive={activeFilter === 'new'} />}
+          label={t('newQuiz')}
+          isActive={activeFilter === 'new'}
+          onClick={() => setActiveFilter('new')}
+        />
+        <FilterButton
+          icon={<MissedQuizIcon isActive={activeFilter === 'missed'} />}
+          label={t('missedQuiz')}
+          isActive={activeFilter === 'missed'}
+          onClick={() => setActiveFilter('missed')}
+        />
+        <FilterButton
+          icon={<DoneQuizzesIcon isActive={activeFilter === 'done'} />}
+          label={t('doneQuizzes')}
+          isActive={activeFilter === 'done'}
+          onClick={() => setActiveFilter('done')}
+        />
       </div>
 
       <div className="bg-white dark:bg-brand-mid-purple/80 rounded-2xl p-4">
@@ -266,7 +300,7 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
             key={q.id}
             quiz={q}
             status={list.status}
-            onTakeQuiz={list.status === 'new' ? handleTake : undefined}
+            onTakeQuiz={list.status === 'new' ? onTakeQuiz : undefined}
             onViewDetails={list.status === 'done' ? onViewDetails : undefined}
           />
         )}

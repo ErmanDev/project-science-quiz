@@ -29,7 +29,7 @@
       "status": "posted",
       "questions": [
         {
-          "id": 1762332570363.2986,
+          "id": 1762570654154.9731,
           "type": "multiple-choice",
           "category": "Earth and Space",
           "question": "A coastal town experiences unusually high tides during a particular month. The newspaper suggests this is due to a special alignment of the Earth, Moon, and Sun. Which alignment is most likely to produce the highest tides?",
@@ -45,9 +45,34 @@
         }
       ],
       "classIds": [
-        "cls_1762312271068"
+        "cls_1762312271068",
+        "cls_1762313259890"
       ],
-      "dueDate": "2025-11-07T23:59"
+      "dueDate": "2025-11-09T23:59"
+    },
+    {
+      "id": "1762697870757",
+      "title": "board",
+      "type": "Board Game",
+      "mode": "Team",
+      "status": "posted",
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX",
+      "questions": [
+        {
+          "id": 1762697866409.1216,
+          "type": "identification",
+          "question": "board test",
+          "answer": "board",
+          "points": 10,
+          "timeLimit": 30,
+          "category": "Earth and Space"
+        }
+      ],
+      "classIds": [
+        "cls_1762312271068",
+        "cls_1762313259890"
+      ],
+      "dueDate": "2025-11-10T23:59"
     }
   ],
   "students": [],
@@ -104,15 +129,26 @@
   "announcements": [],
   "notifications": [
     {
-      "id": "ntf_1762360699790",
+      "id": "ntf_1762570666620",
       "title": "Quiz 1",
-      "body": "Quiz 1 has been posted for test - test.\nDue: 11/7/2025, 11:59:00 PM",
+      "body": "Quiz 1 has been posted for new - new.\nDue: 11/9/2025, 11:59:00 PM",
       "recipientType": "class",
-      "recipientId": "cls_1762312271068",
-      "createdAt": "2025-11-05T16:38:19.787Z",
+      "recipientId": "cls_1762313259890",
+      "createdAt": "2025-11-08T02:57:46.617Z",
       "createdBy": "7yinGFqu9lYdDEHwfMjUX",
       "read": false,
       "quizId": "quiz_1762332579217"
+    },
+    {
+      "id": "ntf_1762697879976",
+      "title": "board",
+      "body": "board has been posted for new - new.\nDue: 11/10/2025, 11:59:00 PM",
+      "recipientType": "class",
+      "recipientId": "cls_1762313259890",
+      "createdAt": "2025-11-09T14:17:59.954Z",
+      "createdBy": "7yinGFqu9lYdDEHwfMjUX",
+      "read": false,
+      "quizId": "1762697870757"
     }
   ],
   "classStudents": [
