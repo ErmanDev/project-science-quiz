@@ -7,10 +7,10 @@
       "name": "Student",
       "passwordHash": "$2a$10$dGtnGwX3Zh6ETy0z6Wav4.yeH1Ki/FEn.EOuauPoxAJdCeL5dyDwW",
       "createdAt": "2025-11-04T14:57:01.615Z",
-      "updatedAt": "2025-11-09T18:35:02.554Z",
-      "level": 3,
-      "exp": 0,
-      "accuracy": 100
+      "updatedAt": "2025-11-10T15:36:15.310Z",
+      "level": 1,
+      "accuracy": 60,
+      "exp": 100
     },
     {
       "id": "7yinGFqu9lYdDEHwfMjUX",
@@ -21,19 +21,18 @@
       "createdAt": "2025-11-04T14:57:29.287Z",
       "updatedAt": "2025-11-04T14:57:29.287Z",
       "level": 1,
-      "exp": 0,
-      "accuracy": 0
+      "accuracy": 0,
+      "exp": 0
     },
     {
-      "id": "JrXJzhjS5WgKu-JnoHq8A",
+      "id": "D2GjHp50mi1G9u9Vj5283",
       "role": "student",
       "email": "test@gmail.com",
       "name": "test",
-      "passwordHash": "$2a$10$QDHoeZzLX2/kadRa9UNHVeeChUIwG/qz/b3gogW.b7oqjfnuRYgXq",
-      "createdAt": "2025-11-09T19:28:52.325Z",
-      "updatedAt": "2025-11-09T19:28:52.325Z",
+      "passwordHash": "$2a$10$NtcwWe0DZ2TdO7uKW7UUj.Ee/2Ilj8tgsDmjr5sLCwgTTOkofU3DC",
+      "createdAt": "2025-11-10T15:19:09.002Z",
+      "updatedAt": "2025-11-10T15:19:09.002Z",
       "level": 1,
-      "xp": 0,
       "accuracy": 0,
       "exp": 0
     }
@@ -92,6 +91,75 @@
         "cls_1762313259890"
       ],
       "dueDate": "2025-11-10T23:59"
+    },
+    {
+      "id": "1762784651995",
+      "title": "Card",
+      "type": "Card Game",
+      "mode": "Team",
+      "status": "posted",
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX",
+      "questions": [
+        {
+          "id": "1762784646419.7898",
+          "type": "identification",
+          "category": "Earth and Space",
+          "question": "Card",
+          "options": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "answer": "test",
+          "points": 10,
+          "timeLimit": 30
+        }
+      ],
+      "classIds": [
+        "cls_1762312271068",
+        "cls_1762313259890"
+      ],
+      "dueDate": "2025-11-11T23:59"
+    },
+    {
+      "id": "1762786624783",
+      "title": "asdsadad",
+      "type": "Card Game",
+      "mode": "Solo",
+      "status": "posted",
+      "teacherId": "7yinGFqu9lYdDEHwfMjUX",
+      "questions": [
+        {
+          "id": "1762786621001.3713",
+          "type": "multiple-choice",
+          "category": "Earth and Space",
+          "question": "A coastal town experiences unusually high tides during a particular month. The newspaper suggests this is due to a special alignment of the Earth, Moon, and Sun. Which alignment is most likely to produce the highest tides?",
+          "options": [
+            "Quarter Moon phase, 90° alignment.",
+            "New Moon or Full Moon phase, nearly straight alignment.",
+            "Gibbous Moon phase, ~120° alignment.",
+            "Crescent Moon phase, close to the Sun."
+          ],
+          "answer": "New Moon or Full Moon phase, nearly straight alignment.",
+          "points": 10,
+          "timeLimit": 30
+        },
+        {
+          "id": 1762786643336.477,
+          "type": "identification",
+          "question": "asdasdasd",
+          "answer": "asd",
+          "points": 10,
+          "timeLimit": 30,
+          "category": "Earth and Space"
+        }
+      ],
+      "classIds": [
+        "cls_1762312271068",
+        "cls_1762313259890"
+      ],
+      "dueDate": "2025-11-11T23:59"
     }
   ],
   "students": [],
@@ -164,6 +232,49 @@
       "submittedAt": "2025-11-09T18:35:02.554Z",
       "gradedAt": null,
       "progressApplied": true
+    },
+    {
+      "id": "PDNZ7EkvvqdPk7EVlZP_F",
+      "quizId": "1762784651995",
+      "studentId": "ltsmGeHvdZmoxO196hPqS",
+      "answers": [
+        {
+          "questionId": 1762784646419.7898,
+          "answer": "test",
+          "correctAnswer": "test",
+          "wasCorrect": true,
+          "points": 10
+        }
+      ],
+      "score": 10,
+      "percent": 100,
+      "totalPoints": 10,
+      "submittedAt": "2025-11-10T14:25:38.994Z"
+    },
+    {
+      "id": "V3PyfvhfZmFBZ739R__q1",
+      "quizId": "1762786624783",
+      "studentId": "ltsmGeHvdZmoxO196hPqS",
+      "answers": [
+        {
+          "questionId": 1762786621001.3713,
+          "answer": "New Moon or Full Moon phase, nearly straight alignment.",
+          "correctAnswer": "New Moon or Full Moon phase, nearly straight alignment.",
+          "wasCorrect": true,
+          "points": 10
+        },
+        {
+          "questionId": 1762786643336.477,
+          "answer": "yuiyui",
+          "correctAnswer": "asd",
+          "wasCorrect": false,
+          "points": 10
+        }
+      ],
+      "score": 10,
+      "percent": 50,
+      "totalPoints": 20,
+      "submittedAt": "2025-11-10T15:36:15.309Z"
     }
   ],
   "quizBank": [
@@ -209,6 +320,28 @@
       "createdBy": "7yinGFqu9lYdDEHwfMjUX",
       "read": false,
       "quizId": "1762697870757"
+    },
+    {
+      "id": "ntf_1762784711028",
+      "title": "Card",
+      "body": "Card has been posted for new - new.\nDue: 11/11/2025, 11:59:00 PM",
+      "recipientType": "class",
+      "recipientId": "cls_1762313259890",
+      "createdAt": "2025-11-10T14:25:11.021Z",
+      "createdBy": "7yinGFqu9lYdDEHwfMjUX",
+      "read": false,
+      "quizId": "1762784651995"
+    },
+    {
+      "id": "ntf_1762786685200",
+      "title": "asdsadad",
+      "body": "asdsadad has been posted for test - test.\nDue: 11/11/2025, 11:59:00 PM",
+      "recipientType": "class",
+      "recipientId": "cls_1762312271068",
+      "createdAt": "2025-11-10T14:58:05.194Z",
+      "createdBy": "7yinGFqu9lYdDEHwfMjUX",
+      "read": false,
+      "quizId": "1762786624783"
     }
   ],
   "classStudents": [

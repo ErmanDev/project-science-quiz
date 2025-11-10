@@ -1,22 +1,42 @@
+// server/src/routes/submissions.ts
 import { Router } from 'express';
 import db from '../db';
 import { nanoid } from 'nanoid';
 
 const router = Router();
 
-const XP_PER_LEVEL = 500;
+const EXP_PER_LEVEL = 500;
 
-// helper to recompute accuracy (% correct over all answered points)
+/**
+ * Recompute accuracy from all of a student's submissions.
+ * Uses per-answer points so we don't depend on missing totalPoints fields.
+ */
 function recomputeAccuracyForStudent(studentId: string) {
-  const submissions = (db.data!.submissions || []).filter((s: any) => String(s.studentId) === String(studentId));
-  let totalPoints = 0;
-  let earned = 0;
-  for (const s of submissions) {
-    earned += Number(s.score || 0);
-    totalPoints += Number(s.totalPoints || 0);
+  const subs = (db.data!.submissions || []).filter(
+    (s: any) => String(s.studentId) === String(studentId)
+  );
+
+  let earnedTotal = 0;
+  let possibleTotal = 0;
+
+  for (const s of subs) {
+    if (Array.isArray(s.answers) && s.answers.length) {
+      for (const a of s.answers) {
+        const pts = Number(a?.points || 0);
+        possibleTotal += pts;
+        if (a?.wasCorrect) earnedTotal += pts;
+      }
+    } else {
+      // Fallback for legacy rows: use score/totalPoints if present
+      const score = Number(s.score || 0);
+      const total = Number(s.totalPoints || 0);
+      earnedTotal += score;
+      possibleTotal += total;
+    }
   }
-  const accuracy = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
-  return accuracy;
+
+  if (possibleTotal <= 0) return 0;
+  return Math.round((earnedTotal / possibleTotal) * 100);
 }
 
 // GET /api/submissions?studentId=...
@@ -40,19 +60,25 @@ router.post('/', async (req, res) => {
 
   db.data!.submissions = db.data!.submissions || [];
 
-  // prevent duplicate submission for the same (quizId, studentId)
+  // Prevent duplicate submission for (quizId, studentId)
   const dup = db.data!.submissions.find(
     (s: any) => String(s.quizId) === String(quizId) && String(s.studentId) === String(studentId)
   );
   if (dup) {
-    return res.status(200).json(dup); // already submitted; return existing
+    return res.status(200).json(dup);
   }
 
-  // compute total points from the quiz definition
-  const quiz = (db.data!.quizzes || []).find((q: any) => String(q.id) === String(quizId));
-  const totalPoints = Array.isArray(quiz?.questions)
-    ? quiz.questions.reduce((s: number, q: any) => s + Number(q.points || 0), 0)
-    : 0;
+  // Compute total points safely
+  let totalPoints = 0;
+  if (Array.isArray(answers) && answers.length) {
+    totalPoints = answers.reduce((sum: number, a: any) => sum + Number(a?.points || 0), 0);
+  } else {
+    // fallback to quiz.points sum
+    const quiz = (db.data!.quizzes || []).find((q: any) => String(q.id) === String(quizId));
+    totalPoints = Array.isArray(quiz?.questions)
+      ? quiz.questions.reduce((s: number, q: any) => s + Number(q.points || 0), 0)
+      : 0;
+  }
 
   const saved = {
     id: nanoid(),
@@ -64,22 +90,23 @@ router.post('/', async (req, res) => {
     totalPoints,
     submittedAt: new Date().toISOString(),
   };
+
   db.data!.submissions.push(saved);
 
-  // ---- Update user XP/Level/Accuracy ----
+  // ---- Update user EXP/Level/Accuracy ----
   db.data!.users = db.data!.users || [];
   const uIdx = db.data!.users.findIndex((u: any) => String(u.id) === String(studentId));
   if (uIdx > -1) {
     const u = { ...db.data!.users[uIdx] };
 
-    // XP: simple rule = score * 10 (adjust to your liking)
-    const xpGain = Number(saved.score || 0) * 10;
-    u.xp = Number(u.xp || 0) + xpGain;
+    // Use EXP, not XP
+    const expGain = Number(saved.score || 0) * 10; // 10 EXP per point
+    u.exp = Number(u.exp || 0) + expGain;
 
-    // Level from XP
-    u.level = Math.floor(Number(u.xp) / XP_PER_LEVEL) + 1;
+    // Level from EXP
+    u.level = Math.floor(Number(u.exp) / EXP_PER_LEVEL) + 1;
 
-    // Accuracy across all submissions
+    // Accuracy recomputed across all submissions
     u.accuracy = recomputeAccuracyForStudent(String(studentId));
 
     u.updatedAt = new Date().toISOString();

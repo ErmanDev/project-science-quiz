@@ -141,4 +141,25 @@ router.post('/:id/unpost', async (req, res) => {
   res.json(normalize(list[idx]));
 });
 
+// DELETE /api/quizzes/:id  <-- add this to enable deletion from the UI
+router.delete('/:id', async (req, res) => {
+  await db.read();
+  const { id } = req.params;
+
+  const list = db.data!.quizzes || [];
+  const idx = list.findIndex((x: any) => String(x.id) === String(id));
+  if (idx < 0) return res.status(404).send('Quiz not found');
+
+  // Remove the quiz
+  const [removed] = list.splice(idx, 1);
+
+  // Optional clean-up: remove notifications linked to this quiz (if you use quizId there)
+  if (Array.isArray(db.data!.notifications)) {
+    db.data!.notifications = db.data!.notifications.filter((n: any) => String(n.quizId) !== String(id));
+  }
+
+  await db.write();
+  res.json({ ok: true, deletedId: String(id), quiz: normalize(removed) });
+});
+
 export default router;

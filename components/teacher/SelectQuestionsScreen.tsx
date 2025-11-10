@@ -1,178 +1,207 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
-import { multipleChoiceQuestions, identificationQuestions, Question, QuestionCategory } from '../../data/teacherQuizQuestions';
+import SelectQuestionFromVaultModal, {
+  Question as VaultQuestion,
+} from './SelectQuestionFromVaultModal';
 
-// Re-using these from QuizBankScreen
-const BackIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-);
-const ChevronDownIcon: React.FC<{ isRotated?: boolean }> = ({ isRotated }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 transform transition-transform duration-200 ${isRotated ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-);
+type Mode = 'Solo' | 'Team' | 'Classroom';
+type GameCategory = 'Card' | 'Board' | 'Normal';
 
-const SelectableQuestionItem: React.FC<{ question: Question; isSelected: boolean; onToggle: () => void; }> = ({ question, isSelected, onToggle }) => {
-    return (
-        <div 
-            onClick={onToggle}
-            className={`bg-brand-deep-purple/50 p-3 rounded-lg border transition-all duration-200 cursor-pointer
-                ${isSelected ? 'border-brand-glow shadow-glow' : 'border-brand-light-purple/30 hover:border-brand-light-purple'}`}
-        >
-            {question.imageUrl && (
-                <div className="mb-2 rounded-md overflow-hidden h-24 bg-black/20 flex items-center justify-center">
-                    <img src={question.imageUrl} alt="Question visual aid" className="max-h-full max-w-full object-contain" />
-                </div>
-            )}
-            <div className="flex justify-between items-start">
-                <div className="flex-grow pr-2">
-                    <p className="text-sm text-gray-200">{question.question}</p>
-                    <p className="text-xs text-brand-glow mt-1">{question.points} points</p>
-                </div>
-                <div className="flex-shrink-0 pt-1">
-                    <input
-                        type="checkbox"
-                        checked={isSelected}
-                        readOnly
-                        className="h-5 w-5 rounded border-gray-300 text-brand-accent focus:ring-brand-glow bg-brand-deep-purple/50 accent-brand-accent"
-                    />
-                </div>
-            </div>
-        </div>
-    );
-};
+interface Props {
+  onBack: () => void;
 
-interface SelectQuestionsScreenProps {
-    onBack: () => void;
-    onSaveQuiz: (selectedIds: number[]) => void;
+  // For Card/Board legacy flow: you might still support a manual card builder elsewhere
+  onCreateQuizWithCards: (
+    config: { name: string; mode: Mode; category: 'Card' | 'Board' },
+    cards: VaultQuestion[]
+  ) => Promise<void> | void;
+
+  // NEW: Create a Normal quiz from Vault questions
+  onCreateNormal: (
+    config: { name: string; mode: Mode },
+    questions: VaultQuestion[]
+  ) => Promise<void> | void;
+
+  // When editing an existing quiz (optional)
+  quizToEdit?: {
+    id: string | number;
+    title: string;
+    mode: Mode;
+    type: 'Card Game' | 'Board Game' | 'Normal';
+    questions: VaultQuestion[];
+  } | null;
+  onUpdateQuiz?: (
+    updated: { name: string; mode: Mode; category: GameCategory },
+    cards: VaultQuestion[]
+  ) => Promise<void> | void;
+
+  // Optional hook to add a single card into vault (kept from your previous API)
+  onAddCardToVault?: (card: VaultQuestion) => void;
 }
 
-const SelectQuestionsScreen: React.FC<SelectQuestionsScreenProps> = ({ onBack, onSaveQuiz }) => {
-    const { t } = useTranslations();
-    const allQuestions = useMemo(() => [...multipleChoiceQuestions, ...identificationQuestions], []);
-    
-    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-    // FIX: Corrected category names to match QuestionCategory type.
-    const questionCategories: QuestionCategory[] = ['Earth and Space', 'Living Things and Their Environment', 'Matter', 'Force, Motion, and Energy'];
-    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-        // FIX: Corrected category name to match QuestionCategory type.
-        'Earth and Space': true,
-    });
+const CreateQuizScreen: React.FC<Props> = ({
+  onBack,
+  onCreateQuizWithCards,
+  onCreateNormal,
+  quizToEdit,
+  onUpdateQuiz,
+  onAddCardToVault,
+}) => {
+  const { t } = useTranslations();
 
-    const groupedQuestions = useMemo(() => {
-        // FIX: Corrected category names to match QuestionCategory type.
-        const initial: Record<QuestionCategory, { 'multiple-choice': Question[], 'identification': Question[] }> = {
-            'Earth and Space': { 'multiple-choice': [], 'identification': [] },
-            'Living Things and Their Environment': { 'multiple-choice': [], 'identification': [] },
-            'Matter': { 'multiple-choice': [], 'identification': [] },
-            'Force, Motion, and Energy': { 'multiple-choice': [], 'identification': [] },
-        };
+  const initial = useMemo(() => {
+    if (!quizToEdit) return { name: '', mode: 'Classroom' as Mode, category: 'Normal' as GameCategory };
+    const cat: GameCategory =
+      quizToEdit.type === 'Card Game' ? 'Card' : quizToEdit.type === 'Board Game' ? 'Board' : 'Normal';
+    return { name: quizToEdit.title, mode: quizToEdit.mode, category: cat };
+  }, [quizToEdit]);
 
-        return allQuestions.reduce((acc, q) => {
-            if (acc[q.category]) {
-                acc[q.category][q.type].push(q);
-            }
-            return acc;
-        }, initial);
-    }, [allQuestions]);
+  const [name, setName] = useState(initial.name);
+  const [mode, setMode] = useState<Mode>(initial.mode);
+  const [category, setCategory] = useState<GameCategory>(initial.category);
 
-    const toggleQuestionSelection = (id: number) => {
-        setSelectedIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
-            return newSet;
-        });
-    };
+  // Vault selection (for Normal)
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [selectedFromVault, setSelectedFromVault] = useState<VaultQuestion[]>(
+    quizToEdit && initial.category === 'Normal' ? quizToEdit.questions : []
+  );
 
-    const toggleCategory = (category: QuestionCategory) => {
-        setExpandedCategories(prev => ({...prev, [category]: !prev[category]}));
-    };
+  const canSave = name.trim().length > 0 && (category !== 'Normal' || selectedFromVault.length > 0);
 
-    const handleSave = () => {
-        onSaveQuiz(Array.from(selectedIds));
-    };
+  const handleSave = async () => {
+    if (category === 'Normal') {
+      await onCreateNormal({ name: name.trim(), mode }, selectedFromVault);
+      return;
+    }
 
-    return (
-        <div className="relative h-full flex flex-col text-white">
-            <header className="flex items-center mb-4 flex-shrink-0">
-                <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors" aria-label="Back">
-                    <BackIcon />
-                </button>
-                <h2 className="text-2xl font-bold ml-2">{t('selectQuestions')}</h2>
-            </header>
+    // Card/Board – if you have a manual composer you can route to that; here we just pass whatever we have.
+    await onCreateQuizWithCards({ name: name.trim(), mode, category: category as 'Card' | 'Board' }, selectedFromVault);
+  };
 
-            <main className="flex-grow overflow-y-auto hide-scrollbar pr-2 space-y-3 pb-20">
-                {questionCategories.map(category => {
-                    const categoryQuestions = groupedQuestions[category];
-                    if (!categoryQuestions || (categoryQuestions['multiple-choice'].length === 0 && categoryQuestions['identification'].length === 0)) {
-                        return null;
-                    }
+  return (
+    <div className="h-full flex flex-col text-white">
+      <div className="flex items-center mb-4">
+        <button
+          onClick={onBack}
+          className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors"
+          aria-label="Back"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 className="text-2xl font-bold ml-2">
+          {quizToEdit ? t('editQuiz') || 'Edit Quiz' : t('createQuiz') || 'Create Quiz'}
+        </h2>
+      </div>
 
-                    return (
-                        <div key={category} className="bg-brand-mid-purple/50 rounded-lg overflow-hidden">
-                            <button onClick={() => toggleCategory(category)} className="w-full flex justify-between items-center p-3 text-left bg-brand-mid-purple/80">
-                                <h3 className="font-bold text-lg text-brand-glow">{category}</h3>
-                                <ChevronDownIcon isRotated={!expandedCategories[category]} />
-                            </button>
-                            {expandedCategories[category] && (
-                                <div className="p-3 space-y-3">
-                                    {categoryQuestions['multiple-choice'].length > 0 && (
-                                        <div>
-                                            <h4 className="font-semibold text-gray-300 mb-2 pl-1">Multiple Choice</h4>
-                                            <div className="space-y-2">
-                                                {categoryQuestions['multiple-choice'].map(q => 
-                                                    <SelectableQuestionItem 
-                                                        key={q.id} 
-                                                        question={q} 
-                                                        isSelected={selectedIds.has(q.id)}
-                                                        onToggle={() => toggleQuestionSelection(q.id)}
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {categoryQuestions['identification'].length > 0 && (
-                                        <div>
-                                            <h4 className="font-semibold text-gray-300 mb-2 mt-3 pl-1">Identification</h4>
-                                            <div className="space-y-2">
-                                                 {categoryQuestions['identification'].map(q => 
-                                                    <SelectableQuestionItem 
-                                                        key={q.id} 
-                                                        question={q} 
-                                                        isSelected={selectedIds.has(q.id)}
-                                                        onToggle={() => toggleQuestionSelection(q.id)}
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )
-                })}
-            </main>
-
-            <footer className="absolute bottom-0 left-0 right-0 p-4 bg-brand-deep-purple/80 backdrop-blur-sm border-t border-brand-light-purple/30">
-                <div className="flex justify-between items-center">
-                    <p className="font-semibold">{selectedIds.size} questions selected</p>
-                    <button
-                        onClick={handleSave}
-                        disabled={selectedIds.size === 0}
-                        className="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 ease-in-out hover:bg-blue-500 hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 disabled:bg-gray-500/50 disabled:cursor-not-allowed disabled:shadow-none"
-                    >
-                        Save Quiz
-                    </button>
-                </div>
-            </footer>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Quiz Name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter quiz title"
+            className="w-full bg-brand-deep-purple/50 rounded-lg p-3 outline-none border border-brand-light-purple/30 focus:border-brand-glow"
+          />
         </div>
-    );
+
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Mode</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['Solo', 'Team', 'Classroom'] as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`py-2 rounded-lg border transition-colors ${
+                  mode === m
+                    ? 'border-brand-glow bg-brand-deep-purple/70'
+                    : 'border-brand-light-purple/30 hover:bg-brand-deep-purple/50'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Category</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['Card', 'Board', 'Normal'] as GameCategory[]).map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                className={`py-2 rounded-lg border transition-colors ${
+                  category === c
+                    ? 'border-brand-glow bg-brand-deep-purple/70'
+                    : 'border-brand-light-purple/30 hover:bg-brand-deep-purple/50'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* NORMAL: pick from Vault with your new design */}
+        {category === 'Normal' && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-gray-300">
+                Selected from Vault: <span className="font-semibold">{selectedFromVault.length}</span>
+              </p>
+              <button
+                onClick={() => setVaultOpen(true)}
+                className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-all hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                Select from Vault
+              </button>
+            </div>
+
+            {selectedFromVault.length > 0 && (
+              <div className="space-y-2 max-h-56 overflow-y-auto hide-scrollbar pr-1">
+                {selectedFromVault.map((q) => (
+                  <div key={q.id} className="bg-brand-deep-purple/40 border border-brand-light-purple/30 rounded-lg p-3">
+                    <p className="text-sm text-gray-200">{q.question}</p>
+                    <p className="text-xs text-brand-glow mt-1">
+                      {q.category} • {q.type} • {q.points} pts
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto pt-4 flex justify-end gap-3">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 rounded-lg border border-brand-light-purple/30 hover:bg-white/10 transition-colors"
+        >
+          {t('cancel') || 'Cancel'}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className="px-5 py-2 rounded-lg bg-brand-accent text-white font-semibold disabled:bg-gray-500/50 disabled:cursor-not-allowed"
+        >
+          {quizToEdit ? (t('save') || 'Save') : (t('create') || 'Create')}
+        </button>
+      </div>
+
+      <SelectQuestionFromVaultModal
+        isOpen={vaultOpen}
+        onClose={() => setVaultOpen(false)}
+        gameCategory="Normal"
+        onSelectQuestions={(qs) => {
+          setSelectedFromVault(qs);
+          setVaultOpen(false);
+        }}
+      />
+    </div>
+  );
 };
 
-export default SelectQuestionsScreen;
+export default CreateQuizScreen;

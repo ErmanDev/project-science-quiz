@@ -10,6 +10,7 @@ import CreateQuizScreen from './CreateQuizScreen';
 import SelectQuestionsScreen from './SelectQuestionsScreen';
 import QuizDetailModal from './QuizDetailModal';
 import PostQuizModal from './PostQuizModal';
+import SelectQuestionFromVaultModal from './SelectQuestionFromVaultModal';
 
 import type { ClassData } from './ClassroomScreen';
 
@@ -72,18 +73,6 @@ const QuizVaultIcon: React.FC = () => (
     </svg>
   </div>
 );
-const ChevronDownIcon: React.FC<{ isRotated?: boolean }> = ({ isRotated }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    className={`h-6 w-6 transform transition-transform duration-200 ${isRotated ? 'rotate-180' : ''}`}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-  </svg>
-);
 
 // ---------- API: quizzes ----------
 async function apiGetQuizzes(teacherId: string): Promise<TeacherQuiz[]> {
@@ -135,7 +124,7 @@ async function createNotification(payload: {
   recipientType: 'class' | 'user' | 'all';
   recipientId?: string | null;
   createdBy: string;
-  quizId?: string | number; // used to delete on unpost
+  quizId?: string | number;
 }) {
   const res = await fetch(`${API_URL}/api/notifications`, {
     method: 'POST',
@@ -152,9 +141,8 @@ async function createNotification(payload: {
 }
 
 async function deleteNotificationsForQuiz(quizId: string | number) {
-  // expects backend to support filtering by quizId
   const res = await fetch(`${API_URL}/api/notifications?quizId=${encodeURIComponent(String(quizId))}`);
-  if (!res.ok) return; // quietly ignore
+  if (!res.ok) return;
   const items = await res.json();
   if (!Array.isArray(items)) return;
 
@@ -212,11 +200,9 @@ async function apiDeleteBankItem(id: string) {
 
 // ---------- API: classes (helper for fallback lookup) ----------
 async function apiGetClassById(id: string) {
-  // If you have a /classes/:id route, try it first:
   const byId = await fetch(`${API_URL}/api/classes/${encodeURIComponent(id)}`);
   if (byId.ok) return byId.json();
 
-  // Fallback: fetch by teacher (or all) then filter
   try {
     const raw = localStorage.getItem('currentUser');
     const me = raw ? JSON.parse(raw) : null;
@@ -260,6 +246,9 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
   const [quizToDelete, setQuizToDelete] = useState<TeacherQuiz | null>(null);
   const [quizDetails, setQuizDetails] = useState<TeacherQuiz | null>(null);
   const [quizToPost, setQuizToPost] = useState<TeacherQuiz | null>(null);
+
+  // NORMAL: selector modal
+  const [showVaultSelector, setShowVaultSelector] = useState(false);
 
   const [newQuizConfig, setNewQuizConfig] = useState<{
     name: string;
@@ -449,13 +438,46 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
     }
   };
 
-  const handleSaveSelectQuestionsQuiz = async (selectedIds: number[]) => {
+  // For NORMAL: open vault picker modal and create from its selection
+  const handleOpenVaultForNormal = (config: { name: string; mode: 'Solo' | 'Team' | 'Classroom'; category: 'Card' | 'Board' | 'Normal' }) => {
+    setNewQuizConfig(config);
+    if (config.category === 'Normal') {
+      setShowVaultSelector(true);
+    } else {
+      setView('selectQuestions'); // Card/Board legacy selector
+    }
+  };
+
+  // Called by modal when teacher confirms selected questions (Normal)
+  const handleVaultSelectedForNormal = async (selected: Question[]) => {
     if (!newQuizConfig || !teacherId) return;
-    const selected = questions.filter(q => selectedIds.includes(Number(q.id)));
     try {
       await apiCreateQuiz({
         title: newQuizConfig.name,
-        type: `${newQuizConfig.category} Game` as TeacherQuiz['type'],
+        type: 'Normal',
+        mode: newQuizConfig.mode,
+        status: 'draft',
+        teacherId,
+        questions: selected,
+      });
+      await refreshQuizzes();
+      setActiveQuizFilter('draft');
+      setShowVaultSelector(false);
+      setView('main');
+      setNewQuizConfig(null);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create quiz');
+    }
+  };
+
+  // Card/Board legacy path (kept)
+  const handleSaveSelectQuestionsQuiz = async (selectedIds: (number | string)[]) => {
+    if (!newQuizConfig || !teacherId) return;
+    const selected = questions.filter(q => selectedIds.map(String).includes(String(q.id)));
+    try {
+      await apiCreateQuiz({
+        title: newQuizConfig.name,
+        type: newQuizConfig.category === 'Normal' ? 'Normal' : (`${newQuizConfig.category} Game` as TeacherQuiz['type']),
         mode: newQuizConfig.mode,
         status: 'draft',
         teacherId,
@@ -469,6 +491,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
     }
   };
 
+  // Unified update for all categories (Normal included)
   const handleUpdateQuiz = async (
     updatedData: { name: string; mode: 'Solo' | 'Team' | 'Classroom'; category: 'Card' | 'Board' | 'Normal' },
     cards: Question[]
@@ -478,7 +501,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
       await apiPatchQuiz(quizToEdit.id, {
         title: updatedData.name,
         mode: updatedData.mode,
-        type: `${updatedData.category} Game` as TeacherQuiz['type'],
+        type: updatedData.category === 'Normal' ? 'Normal' : (`${updatedData.category} Game` as TeacherQuiz['type']),
         questions: cards,
       });
       await refreshQuizzes();
@@ -512,7 +535,6 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
       const prettyDue = new Date(details.dueDate).toLocaleString();
       const createdBy = teacherId || 'system';
 
-      // Resolve all class labels (prop map first, API fallback)
       const labelById = new Map<string, string>();
       await Promise.all(
         details.classIds.map(async (cid) => {
@@ -521,7 +543,6 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
         })
       );
 
-      // Create one notification per class (recipientId stays the ID)
       await Promise.all(
         details.classIds.map(classId =>
           createNotification({
@@ -530,7 +551,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
             recipientType: 'class',
             recipientId: classId,
             createdBy,
-            quizId: details.quizId, // keep for cleanup on unpost
+            quizId: details.quizId,
           })
         )
       );
@@ -546,7 +567,6 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
   const handleUnpostQuiz = async (quiz: TeacherQuiz) => {
     try {
       await apiUnpostQuiz(quiz.id);
-      // remove notifications associated with this quiz
       await deleteNotificationsForQuiz(quiz.id);
       await refreshQuizzes();
       setActiveQuizFilter('draft');
@@ -562,30 +582,44 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
 
   if (view === 'create') {
     return (
-      <CreateQuizScreen
-        onBack={() => {
-          setView('main');
-          setQuizToEdit(null);
-        }}
-        onSelectQuestions={(config) => {
-          setNewQuizConfig(config);
-          setView('selectQuestions');
-        }}
-        onCreateQuizWithCards={handleCreateQuizWithCards}
-        quizToEdit={quizToEdit}
-        onUpdateQuiz={handleUpdateQuiz}
-        onAddCardToVault={(card) =>
-          setQuestionToEdit({
-            ...card,
-            id: 0, // triggers create flow
-          })
-        }
-      />
+      <>
+        <CreateQuizScreen
+          onBack={() => {
+            setView('main');
+            setQuizToEdit(null);
+          }}
+          // For Normal, open Vault modal to fetch from db.json
+          onSelectQuestions={(config) => handleOpenVaultForNormal(config)}
+          onCreateQuizWithCards={handleCreateQuizWithCards}
+          quizToEdit={quizToEdit}
+          onUpdateQuiz={handleUpdateQuiz}
+          onAddCardToVault={(card) =>
+            setQuestionToEdit({
+              ...card,
+              id: 0,
+            })
+          }
+        />
+
+        {/* NORMAL flow modal */}
+        <SelectQuestionFromVaultModal
+          isOpen={showVaultSelector}
+          onClose={() => setShowVaultSelector(false)}
+          gameCategory={newQuizConfig?.category === 'Normal' ? 'Normal' : 'Card'}
+          onSelectQuestions={(qs) => handleVaultSelectedForNormal(qs)}
+        />
+      </>
     );
   }
 
   if (view === 'selectQuestions') {
-    return <SelectQuestionsScreen onBack={() => setView('create')} onSaveQuiz={handleSaveSelectQuestionsQuiz} />;
+    // (kept for Card/Board legacy flow)
+    return (
+      <SelectQuestionsScreen
+        onBack={() => setView('create')}
+        onSaveQuiz={handleSaveSelectQuestionsQuiz}
+      />
+    );
   }
 
   // Vault UI
@@ -612,7 +646,16 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
                   className="w-full flex justify-between items-center p-3 text-left bg-brand-mid-purple/80"
                 >
                   <h3 className="font-bold text-lg text-brand-glow">{cat}</h3>
-                  <ChevronDownIcon isRotated={!expanded[cat]} />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-6 w-6 transform transition-transform duration-200 ${!expanded[cat] ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
                 {expanded[cat] && (
                   <div className="p-3 space-y-3">
