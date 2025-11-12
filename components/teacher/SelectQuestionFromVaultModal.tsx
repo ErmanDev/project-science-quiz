@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 /** ===================== Local Types (match your /api/quiz-bank rows) ===================== */
 

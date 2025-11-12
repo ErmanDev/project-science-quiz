@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
 import NotificationCard from '../dashboard/NotificationCard';
 import { BellIcon, EnvelopeIcon } from '../icons';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 // ----- Types matching your backend -----
 type Announcement = {

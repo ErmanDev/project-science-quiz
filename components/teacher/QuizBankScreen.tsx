@@ -1,7 +1,7 @@
 // components/teacher/QuizBankScreen.tsx
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 import { PencilIcon, TrashIcon } from '../icons';
 import EditQuestionModal from './EditQuestionModal';

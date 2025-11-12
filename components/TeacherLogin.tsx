@@ -5,7 +5,7 @@ import LoginButton from './LoginButton';
 import OutlineButton from './OutlineButton';
 import { useTranslations } from '../hooks/useTranslations';
 import TermsAndConditionsModal from './TermsAndConditionsModal';
-import { API_URL } from '../server/src/config';
+import { API_URL } from '../src/config';
 
 interface TeacherLoginProps {
   onBack: () => void;

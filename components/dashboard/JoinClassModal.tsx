@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 import type { ClassData } from '../ClassCard';
 import { useTranslations } from '../../hooks/useTranslations';
 

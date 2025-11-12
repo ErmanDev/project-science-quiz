@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import SciQuestLogo from './SciQuestLogo';
-import { API_URL } from '../server/src/config';
+import { API_URL } from '../src/config';
 
 interface AdminDashboardProps {
   onBackToLanding: () => void;

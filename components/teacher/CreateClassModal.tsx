@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config'; // ✅ FRONTEND config (not from server)
+import { API_URL } from '../../src/config'; // ✅ FRONTEND config (not from server)
 
 interface CreateClassModalProps {
   isOpen: boolean;

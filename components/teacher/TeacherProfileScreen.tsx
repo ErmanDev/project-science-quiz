@@ -8,7 +8,7 @@ import TeacherSettingsModal from './TeacherSettingsModal';
 import { TeacherDashboardView } from './TeacherBottomNav';
 import { View } from '../../data/quizzes';
 import { Conversation } from '../../App';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 const TeacherSettingsIcon: React.FC = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24">

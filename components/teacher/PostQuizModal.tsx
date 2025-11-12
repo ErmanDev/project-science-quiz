@@ -1,7 +1,7 @@
 // src/components/teacher/PostQuizModal.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 import type { TeacherQuiz } from '../../data/teacherQuizzes';
 
 // If you already export ClassData elsewhere, import it instead of redefining.

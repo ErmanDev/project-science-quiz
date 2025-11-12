@@ -22,7 +22,7 @@ import { ClassStudent } from '../data/classStudentData';
 import TeamPlayersModal from './quiz/TeamPlayersModal';
 import { Conversation, ChatMessage } from '../App';
 import { TeacherProfileData } from './teacher/EditTeacherProfileModal';
-import { API_URL } from '../server/src/config';
+import { API_URL } from '../src/config';
 
 interface StudentDashboardProps {
   activeView: DashboardView;

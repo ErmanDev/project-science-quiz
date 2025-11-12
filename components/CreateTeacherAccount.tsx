@@ -4,7 +4,7 @@ import InputField from './InputField';
 import LoginButton from './LoginButton';
 import OutlineButton from './OutlineButton';
 import { useTranslations } from '../hooks/useTranslations';
-import { REQUIRE_VERIFICATION, API_URL } from '../server/src/config';
+import { REQUIRE_VERIFICATION, API_URL } from '../src/config';
 
 interface CreateTeacherAccountProps {
   onBack: () => void;

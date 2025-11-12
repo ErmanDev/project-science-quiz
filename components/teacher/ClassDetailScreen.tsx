@@ -3,7 +3,7 @@ import { useTranslations } from '../../hooks/useTranslations';
 import { ClassData } from './ClassroomScreen';
 import { ClassStudent } from '../../data/classStudentData';
 import { FlameIcon } from '../icons';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 interface ClassDetailScreenProps {
   classData: ClassData;

@@ -25,7 +25,7 @@ import { Quiz, DoneQuiz, View, DashboardView } from './data/quizzes';
 import { Badge, BadgeCategory, badgeData } from './data/badges';
 import { TeacherProfileData } from './components/teacher/EditTeacherProfileModal';
 import { usePersistentState } from './hooks/usePersistentState';
-import { API_URL } from './server/src/config';
+import { API_URL } from './src/config';
 import QuizTakingScreen from './components/quiz/QuizTakingScreen';
 import { badgesApi } from './src/api';
 

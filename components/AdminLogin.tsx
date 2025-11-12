@@ -3,7 +3,7 @@ import SciQuestLogo from './SciQuestLogo';
 import InputField from './InputField';
 import LoginButton from './LoginButton';
 import OutlineButton from './OutlineButton';
-import { API_URL } from '../server/src/config';
+import { API_URL } from '../src/config';
 
 interface AdminLoginProps {
   onBack: () => void;

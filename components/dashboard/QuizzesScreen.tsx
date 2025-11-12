@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { NewQuizIcon, MissedQuizIcon, DoneQuizzesIcon } from '../icons';
 import OutlineButton from '../OutlineButton';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 
 // ---------- Minimal types ----------
 type QuizMode = 'Solo' | 'Team' | 'Classroom';

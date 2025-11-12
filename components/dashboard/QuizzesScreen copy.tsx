@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { NewQuizIcon, MissedQuizIcon, DoneQuizzesIcon } from '../icons';
 import OutlineButton from '../OutlineButton';
 import { useTranslations } from '../../hooks/useTranslations';
-import { API_URL } from '../../server/src/config'; // ✅ client-side config (NOT server config)
+import { API_URL } from '../../src/config'; // ✅ client-side config (NOT server config)
 
 // ---------- Minimal types (align with your API) ----------
 type QuizMode = 'Solo' | 'Team' | 'Classroom';

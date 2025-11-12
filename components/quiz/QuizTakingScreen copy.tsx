@@ -1,6 +1,6 @@
 // screens/quiz/QuizTakingScreen.tsx
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { API_URL } from '../../server/src/config';
+import { API_URL } from '../../src/config';
 import { Question, MultipleChoiceQuestion, IdentificationQuestion } from '../../data/teacherQuizQuestions';
 
 type QuizType = 'Card Game' | 'Board Game' | 'Normal';

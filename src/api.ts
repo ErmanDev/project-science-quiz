@@ -1,5 +1,5 @@
 // Simple API client to talk to the new backend
-import { API_URL } from '../server/src/config';
+import { API_URL } from './config';
 const API_BASE = import.meta.env.VITE_API_BASE || `${API_URL}/api`;
 
 let token: string | null = null;

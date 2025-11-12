@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { API_URL } from '../../server/src/config';          // ✅ FRONTEND config
+import { API_URL } from '../../src/config';          // ✅ FRONTEND config
 import ClassCard, { ClassData } from '../ClassCard';
 import { useTranslations } from '../../hooks/useTranslations';
 
