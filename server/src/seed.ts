@@ -8,9 +8,10 @@ async function run() {
   const teacherId = nanoid();
   const studentId = nanoid();
 
+  const now = new Date().toISOString();
   db.data!.users = [
-    { id: teacherId, role: 'teacher', email: 'teacher@sciquest.app', name: 'Teacher One', passwordHash: bcrypt.hashSync('password123', 10) },
-    { id: studentId, role: 'student', email: 'student@sciquest.app', name: 'Student One', passwordHash: bcrypt.hashSync('password123', 10), classId: '1' },
+    { id: teacherId, role: 'teacher', email: 'teacher@sciquest.app', name: 'Teacher One', passwordHash: bcrypt.hashSync('password123', 10), level: 1, exp: 0, accuracy: 0, createdAt: now, updatedAt: now },
+    { id: studentId, role: 'student', email: 'student@sciquest.app', name: 'Student One', passwordHash: bcrypt.hashSync('password123', 10), level: 1, exp: 0, accuracy: 0, createdAt: now, updatedAt: now },
   ];
 
   db.data!.classes = [
@@ -32,7 +33,7 @@ async function run() {
       mode: 'Solo',
       questions: [
         { id: 1, type: 'multiple-choice', question: 'What causes the phases of the Moon?', options: ['Earth\'s shadow', 'Moon\'s rotation', 'Position of Moon/Earth/Sun', 'Cloud cover'], answer: 'Position of Moon/Earth/Sun', points: 10, category: 'Astronomy', timeLimit: 30 },
-        { id: 2, type: 'true-false', question: 'A full moon occurs when the Earth is between the Sun and the Moon.', answer: True, points: 5 }
+        { id: 2, type: 'true-false', question: 'A full moon occurs when the Earth is between the Sun and the Moon.', answer: true, points: 5 }
       ]
     }
   ];

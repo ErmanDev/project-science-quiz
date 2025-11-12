@@ -176,7 +176,6 @@ router.post('/students', requireAuth, async (req, res) => {
     email,
     name,
     passwordHash: bcrypt.hashSync(password, 10),
-    classId,
     createdAt: now,
     updatedAt: now,
     level: DEFAULT_LEVEL,

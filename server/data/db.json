@@ -1,5 +1,66 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "02202002",
+      "role": "teacher",
+      "email": "ermanfaminiano020@gmail.com",
+      "name": "Erman Faminiano",
+      "passwordHash": "$2a$10$0JklTW39nOGdseHr.3haI.QDSpKath0D4gOIgf.4/tMtS5w8c85Tm",
+      "createdAt": "2025-11-12T02:08:28.758Z",
+      "updatedAt": "2025-11-12T02:08:28.758Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    },
+    {
+      "id": "CTf1eHwRwst54t0FEhlA1",
+      "role": "admin",
+      "email": "admin",
+      "name": "Administrator",
+      "passwordHash": "$2a$10$5E434EQ2jtQjpsnpM1RRquBMoEKAV0r9ULFMu5eJlNxjaajUn8iIK",
+      "createdAt": "2025-11-12T02:08:34.310Z",
+      "updatedAt": "2025-11-12T02:08:34.310Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    },
+    {
+      "id": "0121234",
+      "role": "teacher",
+      "email": "johndoe@gmail.com",
+      "name": "John Doe",
+      "passwordHash": "$2a$10$QVi/EQ61cSPGh2sNW76H.OlgAhmmEaULOH6y.f9JQ4fixiaRbDuBG",
+      "createdAt": "2025-11-12T02:09:09.870Z",
+      "updatedAt": "2025-11-12T02:09:09.870Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    },
+    {
+      "id": "05292004",
+      "role": "student",
+      "email": "maemonterola@gmail.com",
+      "name": "Mae Monterola",
+      "passwordHash": "$2a$10$YEI/jw7umxjzj8bUVYmGN.Hc0qO2yRP8fFCMIkhE3DgMXovfY6YBO",
+      "createdAt": "2025-11-12T02:11:41.413Z",
+      "updatedAt": "2025-11-12T02:11:41.413Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    },
+    {
+      "id": "12211945",
+      "role": "student",
+      "email": "tommy@gmail.com",
+      "name": "Tommy Bada",
+      "passwordHash": "$2a$10$4OonOTsbfu035//aVNSpY.pmjX64uNAmag0fxeqmuxzAsy1RTHIK.",
+      "createdAt": "2025-11-12T02:14:24.355Z",
+      "updatedAt": "2025-11-12T02:14:24.355Z",
+      "level": 1,
+      "exp": 0,
+      "accuracy": 0
+    }
+  ],
   "quizzes": [],
   "students": [],
   "messages": [],
