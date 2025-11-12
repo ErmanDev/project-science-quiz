@@ -55,9 +55,11 @@ export const fil = {
 
   // Dashboard
   joinClass: 'Sumali sa Klase',
+  myClasses: 'Aking mga Klase',
   notification: 'Notipikasyon',
   newQuizNotification: 'Bagong Pagsusulit!!!',
   lifeScience: 'Agham Buhay...',
+  enterClassCode: 'Ilagay ang Class Code',
   message: 'Mensahe',
   announcement: 'Anunsyo',
   announcements: 'Mga Anunsyo',

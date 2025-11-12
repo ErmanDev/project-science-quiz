@@ -85,7 +85,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const renderContent = () => {
     switch (activeView) {
       case 'home':
-        return <DashboardScreen />;
+        return <DashboardScreen reportsData={reportsData} classes={classes} />;
       case 'announcements':
         return <ChatHubScreen
             userRole="teacher"
@@ -129,7 +129,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       case 'profile':
         return <TeacherProfileScreen 
                     classes={classes} 
-                    quizzes={postedQuizzes} 
+                    quizzes={[...draftQuizzes, ...postedQuizzes]} 
                     profile={profile} 
                     onSave={onSaveProfile}
                     isDarkMode={isDarkMode}

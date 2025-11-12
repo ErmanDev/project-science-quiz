@@ -29,8 +29,8 @@ type NotificationDoc = {
 
 // ----- Small UI bits you already had -----
 const LeaderboardPodium: React.FC<{
-  position: number; avatar: string; color: string; order: number; offset: string;
-}> = ({ position, avatar, color, order, offset }) => (
+  position: number; name: string; avatar: string; color: string; order: number; offset: string;
+}> = ({ position, name, avatar, color, order, offset }) => (
   <div className={`flex flex-col items-center order-${order}`}>
     <img
       src={avatar}
@@ -38,19 +38,89 @@ const LeaderboardPodium: React.FC<{
       className={`w-14 h-14 rounded-full border-4 ${color}`}
       style={{ transform: `translateY(${offset})` }}
     />
+    <span className="text-xs mt-2 text-gray-500 dark:text-gray-300 font-semibold text-center max-w-[60px] truncate">{name}</span>
+    <span className="text-xs text-gray-400 dark:text-gray-400">{position}</span>
   </div>
 );
 
-const LeaderboardCard: React.FC = () => {
+interface LeaderboardCardProps {
+  reportsData?: {
+    allQuizzesStudentScores?: Array<{ name: string; average: number; classId?: string; avatar?: string | null }>;
+  };
+  classes?: Array<{ id: string; name: string; section?: string }>;
+}
+
+const LeaderboardCard: React.FC<LeaderboardCardProps> = ({ reportsData, classes }) => {
   const { t } = useTranslations();
+  
+  // Get top 3 students from the first class
+  const topStudents = React.useMemo(() => {
+    if (!reportsData?.allQuizzesStudentScores || !classes || classes.length === 0) {
+      return [];
+    }
+    
+    const firstClassId = classes[0].id;
+    const classScores = reportsData.allQuizzesStudentScores
+      .filter((s: any) => String(s.classId) === String(firstClassId))
+      .sort((a: any, b: any) => b.average - a.average)
+      .slice(0, 3)
+      .map((s: any, index: number) => ({
+        rank: index + 1,
+        name: s.name,
+        score: s.average,
+        avatar: s.avatar || `https://i.pravatar.cc/150?img=${s.name.charCodeAt(0)}`,
+      }));
+    
+    return classScores;
+  }, [reportsData, classes]);
+
+  const hasData = topStudents.length > 0;
+
   return (
     <div className="bg-white dark:bg-brand-mid-purple/80 rounded-2xl p-4">
       <h2 className="font-bold text-lg mb-2">{t('leaderboard')}</h2>
-      <div className="flex justify-around items-end h-28">
-        <LeaderboardPodium position={2} avatar="https://i.imgur.com/eC2G5hD.png" color="border-gray-400" order={2} offset="0px" />
-        <LeaderboardPodium position={1} avatar="https://i.imgur.com/8Q1Z3vL.png" color="border-yellow-400" order={1} offset="-20px" />
-        <LeaderboardPodium position={3} avatar="https://i.imgur.com/T0bC0Fz.png" color="border-yellow-700" order={3} offset="0px" />
-      </div>
+      {hasData ? (
+        <div className="flex justify-around items-end h-28">
+          {topStudents.length >= 2 && (
+            <LeaderboardPodium 
+              position={2} 
+              name={topStudents[1].name} 
+              avatar={topStudents[1].avatar} 
+              color="border-gray-400" 
+              order={2} 
+              offset="0px" 
+            />
+          )}
+          {topStudents.length >= 1 && (
+            <LeaderboardPodium 
+              position={1} 
+              name={topStudents[0].name} 
+              avatar={topStudents[0].avatar} 
+              color="border-yellow-400" 
+              order={1} 
+              offset="-20px" 
+            />
+          )}
+          {topStudents.length >= 3 && (
+            <LeaderboardPodium 
+              position={3} 
+              name={topStudents[2].name} 
+              avatar={topStudents[2].avatar} 
+              color="border-yellow-700" 
+              order={3} 
+              offset="0px" 
+            />
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-28 bg-gray-100 dark:bg-brand-light-purple/20 rounded-lg border border-gray-200 dark:border-brand-light-purple/30">
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center px-4">
+            {classes && classes.length > 0 
+              ? 'No leaderboard data available yet. Students need to complete quizzes.' 
+              : 'No classes available. Create a class to see leaderboard.'}
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -68,7 +138,14 @@ async function fetchNotificationsByCreator(createdBy: string): Promise<Notificat
   return res.json();
 }
 
-const DashboardScreen: React.FC = () => {
+interface DashboardScreenProps {
+  reportsData?: {
+    allQuizzesStudentScores?: Array<{ name: string; average: number; classId?: string }>;
+  };
+  classes?: Array<{ id: string; name: string; section?: string }>;
+}
+
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ reportsData, classes }) => {
   const { t } = useTranslations();
 
   // resolve teacherId from localStorage
@@ -146,21 +223,21 @@ const DashboardScreen: React.FC = () => {
 
   if (loading) {
     return <div className="space-y-4">
-      <LeaderboardCard />
+      <LeaderboardCard reportsData={reportsData} classes={classes} />
       <div className="bg-white dark:bg-brand-mid-purple/80 rounded-2xl p-4 text-sm text-gray-500">{t('loading') || 'Loading…'}</div>
     </div>;
   }
 
   if (!teacherId) {
     return <div className="space-y-4">
-      <LeaderboardCard />
+      <LeaderboardCard reportsData={reportsData} classes={classes} />
       <div className="bg-white dark:bg-brand-mid-purple/80 rounded-2xl p-4 text-sm text-red-400">Not logged in as teacher.</div>
     </div>;
   }
 
   return (
     <div className="space-y-4">
-      <LeaderboardCard />
+      <LeaderboardCard reportsData={reportsData} classes={classes} />
 
       {/* Notifications (createdBy = teacherId) */}
       <div className="bg-white dark:bg-brand-mid-purple/80 rounded-2xl p-4">

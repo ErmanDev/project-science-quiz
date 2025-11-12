@@ -12,6 +12,7 @@ interface QuizCompletedScreenProps {
   stats: {
     quiz: DoneQuiz;
     earnedBadges: Badge[];
+    expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number };
   };
   onDone: () => void;
   profileName: string;
@@ -36,7 +37,7 @@ const LeaderboardItem: React.FC<{ rank: number, name: string, score: number, isC
 
 
 const QuizCompletedScreen: React.FC<QuizCompletedScreenProps> = ({ stats, onDone, profileName, quizScores, quizMode, currentUserTeamName }) => {
-    const { quiz, earnedBadges } = stats;
+    const { quiz, earnedBadges, expInfo } = stats;
     const [scoreStr, totalPointsStr] = quiz.score.split('/');
     const score = parseInt(scoreStr, 10);
     const totalPoints = parseInt(totalPointsStr, 10);
@@ -52,10 +53,35 @@ const QuizCompletedScreen: React.FC<QuizCompletedScreenProps> = ({ stats, onDone
             .map((player, index) => ({ ...player, rank: index + 1 }));
     }, [quizScores]);
 
+    const levelUp = expInfo && expInfo.newLevel > expInfo.oldLevel;
+    const expChange = expInfo ? expInfo.expGain : 0;
+
     return (
         <div className="w-full max-w-sm mx-auto h-screen flex flex-col items-center justify-center text-white p-4 bg-brand-deep-purple">
             <div className="w-full flex-grow flex flex-col justify-center space-y-4 overflow-hidden">
                 <h1 className="text-4xl font-bold font-orbitron text-center">Quiz Complete!</h1>
+                
+                {/* EXP/Level Alert */}
+                {expInfo && (
+                    <div className={`bg-gradient-to-r ${expChange >= 0 ? 'from-green-500/80 to-emerald-500/80' : 'from-red-500/80 to-rose-500/80'} backdrop-blur-sm border ${expChange >= 0 ? 'border-green-400/50' : 'border-red-400/50'} rounded-2xl p-4 w-full flex flex-col items-center shadow-lg animate-pulse`}>
+                        {levelUp ? (
+                            <>
+                                <h2 className="text-2xl font-bold text-white mb-2">🎉 Level Up! 🎉</h2>
+                                <p className="text-lg font-semibold">Level {expInfo.oldLevel} → Level {expInfo.newLevel}</p>
+                            </>
+                        ) : (
+                            <h2 className="text-xl font-semibold mb-2">Experience Gained</h2>
+                        )}
+                        <div className="flex items-center space-x-2 mt-2">
+                            <span className={`text-2xl font-bold ${expChange >= 0 ? 'text-white' : 'text-white'}`}>
+                                {expChange >= 0 ? '+' : ''}{expChange} EXP
+                            </span>
+                        </div>
+                        <p className="text-sm text-white/90 mt-1">
+                            Total: {expInfo.newExp} EXP
+                        </p>
+                    </div>
+                )}
                 
                 {/* Score Card */}
                 <div className="relative bg-brand-mid-purple/70 backdrop-blur-sm border border-brand-light-purple/50 rounded-2xl p-4 w-full flex flex-col items-center shadow-lg">

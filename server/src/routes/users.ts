@@ -121,21 +121,39 @@ router.get('/:id', requireAuth, async (req, res) => {
   res.json(safe);
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/public/:id', async (req, res) => {
   await db.read();
   const { id } = req.params;
   const users = db.data?.users || [];
   const u = users.find((x: any) => String(x.id) === String(id));
   if (!u) return res.status(404).json({ error: 'User not found' });
 
+  // derive section from latest class membership if available
+  const memberships = (db.data!.classStudents || []).filter(
+    (m: any) => String(m.studentId ?? m.userId ?? m.id) === String(u.id)
+  );
+  let classInfo: { id?: string; name?: string; section?: string } | undefined;
+  if (memberships.length > 0) {
+    const latest = memberships.sort(
+      (a: any, b: any) => new Date(b.joinedAt || 0).getTime() - new Date(a.joinedAt || 0).getTime()
+    )[0];
+    const klass = (db.data!.classes || []).find((c: any) => String(c.id) === String(latest.classId));
+    if (klass) {
+      classInfo = { id: String(klass.id), name: klass.name, section: klass.section };
+    }
+  }
+
   return res.json({
     id: u.id,
     role: u.role,
     email: u.email,
     name: u.name,
+    bio: u.bio || '',
     level: u.level ?? 1,
-    xp: u.xp ?? 0,
+    exp: u.exp ?? 0,
+    xp: u.exp ?? u.xp ?? 0, // Use exp if available, fallback to xp for compatibility
     accuracy: u.accuracy ?? 0,
+    class: classInfo,
   });
 });
 
@@ -224,6 +242,76 @@ router.patch('/:id/stats', requireAuth, async (req, res) => {
 
   const { passwordHash, ...safe } = user as any;
   res.json(safe);
+});
+
+router.post('/:id/reset-password', requireAuth, async (req, res) => {
+  const actor = (req as any).user;
+  if (!actor || actor.role !== 'admin') {
+    return res.status(403).json({ error: 'Only administrators can reset passwords.' });
+  }
+
+  await initDB();
+  const { id } = req.params;
+  const newPassword = String(req.body?.newPassword ?? '').trim();
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+
+  const user = (db.data!.users || []).find(u => String(u.id) === String(id));
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  user.passwordHash = bcrypt.hashSync(newPassword, 10);
+  user.updatedAt = new Date().toISOString();
+  await db.write();
+
+  const { passwordHash, ...safe } = user as any;
+  res.json({ ok: true, user: safe });
+});
+
+router.delete('/:id', requireAuth, async (req, res) => {
+  const actor = (req as any).user;
+  if (!actor || actor.role !== 'admin') {
+    return res.status(403).json({ error: 'Only administrators can remove users.' });
+  }
+
+  await initDB();
+  const { id } = req.params;
+  const users = db.data!.users || [];
+  const idx = users.findIndex(u => String(u.id) === String(id));
+  if (idx === -1) return res.status(404).json({ error: 'User not found.' });
+
+  const target = users[idx];
+  if (target.role === 'admin') {
+    return res.status(400).json({ error: 'Cannot remove administrators.' });
+  }
+
+  users.splice(idx, 1);
+  db.data!.users = users;
+
+  // Remove roster memberships for the user.
+  const classStudents = (db.data!.classStudents || []).filter(
+    (record: any) => String(record.studentId) !== String(id),
+  );
+  db.data!.classStudents = classStudents;
+
+  // Detach teacher from classes and recalc student counts.
+  const classes = (db.data!.classes || []).map((cls: any) => {
+    const next: any = { ...cls };
+    if (String(cls.teacherId) === String(id)) {
+      next.teacherId = null;
+    }
+    const count = classStudents.filter(
+      (record: any) => String(record.classId) === String(cls.id),
+    ).length;
+    next.studentCount = count;
+    return next;
+  });
+  db.data!.classes = classes;
+
+  await db.write();
+
+  const { passwordHash, ...safe } = target as any;
+  res.json({ ok: true, removed: safe });
 });
 
 router.post('/:id/progress', async (req, res) => {

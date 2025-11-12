@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslations } from '../../hooks/useTranslations';
 import { ReportsTitleIcon } from '../icons';
-import { ClassData } from './ClassroomScreen';
+import { ClassData } from '../ClassCard';
 import { TeacherQuiz } from '../../data/teacherQuizzes';
 import { ClassStudent } from '../../data/classStudentData';
 
@@ -36,13 +36,19 @@ const CustomSelect: React.FC<{
     );
 };
 
-const StatCard: React.FC<{ value: string; label1: string; label2: string }> = ({ value, label1, label2 }) => (
-    <div className="bg-brand-mid-purple/80 p-2 rounded-xl text-center flex flex-col justify-center items-center border border-brand-light-purple/30 min-h-[90px]">
-        <span className="font-orbitron font-bold text-3xl text-white">{value}</span>
-        <span className="text-xs text-gray-200 mt-1 leading-tight">{label1}</span>
-        <span className="text-xs text-gray-300 leading-tight">{label2}</span>
-    </div>
-);
+const StatCard: React.FC<{ value: string; label1: string; label2: string }> = ({ value, label1, label2 }) => {
+    // Determine font size based on value length to prevent overlap
+    const valueLength = value.length;
+    const fontSize = valueLength > 5 ? 'text-2xl' : 'text-3xl';
+    
+    return (
+        <div className="bg-brand-mid-purple/80 p-2 rounded-xl text-center flex flex-col justify-center items-center border border-brand-light-purple/30 min-h-[90px]">
+            <span className={`font-orbitron font-bold ${fontSize} text-white break-words px-1`}>{value}</span>
+            <span className="text-xs text-gray-200 mt-1 leading-tight">{label1}</span>
+            <span className="text-xs text-gray-300 leading-tight">{label2}</span>
+        </div>
+    );
+};
 
 const DownloadIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-300 hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -99,18 +105,27 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
     }, [selectedClass, classRosters]);
 
     const filteredAllQuizzesScores = useMemo(() => {
-        if (!showReport || !classStudentNames.size) return [];
-        return reportsData.allQuizzesStudentScores.filter(score => classStudentNames.has(score.name));
-    }, [reportsData.allQuizzesStudentScores, classStudentNames, showReport]);
+        if (!showReport || !selectedClass) return [];
+        // Filter by classId first (more reliable), then by name as fallback
+        return reportsData.allQuizzesStudentScores.filter(score => 
+            String(score.classId) === String(selectedClass) || 
+            (score.classId === '' && classStudentNames.has(score.name))
+        );
+    }, [reportsData.allQuizzesStudentScores, selectedClass, classStudentNames, showReport]);
 
     const filteredSingleQuizScores = useMemo(() => {
-        if (!showReport || !classStudentNames.size) return [];
+        if (!showReport || !selectedClass) return [];
+        // Filter by classId first (more reliable), then by name as fallback
+        let filtered = reportsData.singleQuizStudentScores.filter(score => 
+            String(score.classId) === String(selectedClass) || 
+            (score.classId === '' && classStudentNames.has(score.name))
+        );
         // This additionally filters by selected quiz for accuracy, assuming quizNumber matches quizId
         if (selectedReportType === 'per' && selectedQuiz) {
-            return reportsData.singleQuizStudentScores.filter(score => classStudentNames.has(score.name) && String(score.quizNumber) === selectedQuiz);
+            filtered = filtered.filter(score => String(score.quizNumber) === selectedQuiz);
         }
-        return reportsData.singleQuizStudentScores.filter(score => classStudentNames.has(score.name));
-    }, [reportsData.singleQuizStudentScores, classStudentNames, showReport, selectedReportType, selectedQuiz]);
+        return filtered;
+    }, [reportsData.singleQuizStudentScores, selectedClass, classStudentNames, showReport, selectedReportType, selectedQuiz]);
 
     const reportQuizName = useMemo(() => selectedReportType === 'per' && selectedQuiz
         ? postedQuizzes.find(q => q.id.toString() === selectedQuiz)?.title
@@ -118,7 +133,11 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
 
     const singleQuizPerformance = useMemo(() => {
         if (filteredSingleQuizScores.length === 0) return { name: reportQuizName, number: reportQuizName?.split(' ')[1], average: 0, median: 0, passRate: 0, highest: 0, lowest: 0 };
-        const scores = filteredSingleQuizScores.map(s => parseFloat(s.score));
+        // Parse score string (e.g., "85%" or "85") to number
+        const scores = filteredSingleQuizScores.map(s => {
+            const scoreStr = String(s.score || '0').replace('%', '');
+            return parseFloat(scoreStr) || 0;
+        });
         const sum = scores.reduce((a, b) => a + b, 0);
         const average = sum / scores.length;
         const sortedScores = [...scores].sort((a,b) => a-b);
@@ -128,7 +147,11 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
         return {
             name: reportQuizName,
             number: reportQuizName?.split(' ')[1] || '#?',
-            average, median, passRate, highest: Math.max(...scores), lowest: Math.min(...scores),
+            average: Math.round(average * 10) / 10, 
+            median: Math.round(median * 10) / 10, 
+            passRate: Math.round(passRate * 10) / 10, 
+            highest: Math.round(Math.max(...scores) * 10) / 10, 
+            lowest: Math.round(Math.min(...scores) * 10) / 10,
         };
     }, [filteredSingleQuizScores, reportQuizName]);
     
@@ -150,10 +173,13 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
         : 'Overall Student Performance';
 
     const chartData = selectedReportType === 'per'
-      ? filteredSingleQuizScores.map(s => ({
-          name: s.name.split(' ')[0],
-          score: parseFloat(s.score)
-        }))
+      ? filteredSingleQuizScores.map(s => {
+          const scoreStr = String(s.score || '0').replace('%', '');
+          return {
+            name: s.name.split(' ')[0],
+            score: parseFloat(scoreStr) || 0
+          };
+        })
       : filteredAllQuizzesScores.map(s => ({ name: s.name.split(' ')[0], score: s.average }));
         
     const handleDownloadChart = () => {
@@ -184,7 +210,11 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
         .map((student: any, index: number) => ({ ...student, ranking: index + 1 })), [filteredAllQuizzesScores]);
         
     const rankedSingleQuizScores = useMemo(() => filteredSingleQuizScores
-        .sort((a, b) => parseFloat(b.score) - parseFloat(a.score))
+        .sort((a, b) => {
+            const scoreA = parseFloat(String(a.score || '0').replace('%', '')) || 0;
+            const scoreB = parseFloat(String(b.score || '0').replace('%', '')) || 0;
+            return scoreB - scoreA;
+        })
         .map((student, index) => ({ ...student, ranking: index + 1 })),
     [filteredSingleQuizScores]);
 
@@ -256,12 +286,34 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
                             {classes.map(cls => <option key={cls.id} value={cls.id}>{`${cls.name} - ${cls.section}`}</option>)}
                         </CustomSelect>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <label className="font-bold text-lg text-blue-300">{t('reportType')}</label>
-                        <CustomSelect value={selectedReportType} onChange={(e) => { setSelectedReportType(e.target.value as any); setSelectedQuiz(''); }} placeholder={t('chooseReport')}>
-                            <option value="all">{t('allQuizzes')}</option>
-                            <option value="per">{t('perQuiz')}</option>
-                        </CustomSelect>
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="font-bold text-lg text-blue-300">{t('reportType')}</label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedReportType('all')}
+                                className={`w-full px-4 py-2 rounded-lg border transition-all
+                                    ${selectedReportType === 'all'
+                                        ? 'bg-brand-accent text-white border-brand-accent'
+                                        : 'bg-brand-mid-purple/60 text-gray-200 border-brand-light-purple/40 hover:bg-brand-mid-purple/80'
+                                    }`}
+                            >
+                                {t('allQuizzes')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedReportType('per')}
+                                className={`w-full px-4 py-2 rounded-lg border transition-all
+                                    ${selectedReportType === 'per'
+                                        ? 'bg-brand-accent text-white border-brand-accent'
+                                        : 'bg-brand-mid-purple/60 text-gray-200 border-brand-light-purple/40 hover:bg-brand-mid-purple/80'
+                                    }`}
+                            >
+                                {t('perQuiz')}
+                            </button>
+                        </div>
                     </div>
                     {selectedReportType === 'per' && (
                          <div className="flex items-center justify-between transition-opacity duration-300">
@@ -284,20 +336,20 @@ const ReportsScreen: React.FC<ReportsScreenProps> = ({ reportsData, classes, pos
                     {selectedReportType === 'all' ? (
                         <div className="grid grid-cols-3 gap-2">
                             <StatCard value="All" label1="Quizzes" label2="" />
-                            <StatCard value={allQuizzesPerformance.average.toFixed(2)} label1="Average" label2="(%)" />
-                            <StatCard value={allQuizzesPerformance.median.toFixed(2)} label1="Median" label2="(%)" />
-                            <StatCard value={allQuizzesPerformance.passRate.toFixed(2)} label1="Pass Rate" label2="(%)" />
-                            <StatCard value={allQuizzesPerformance.highest.toFixed(2)} label1="Highest" label2="(%)" />
-                            <StatCard value={allQuizzesPerformance.lowest.toFixed(2)} label1="Lowest" label2="(%)" />
+                            <StatCard value={allQuizzesPerformance.average.toFixed(1)} label1="Average" label2="(%)" />
+                            <StatCard value={allQuizzesPerformance.median.toFixed(1)} label1="Median" label2="(%)" />
+                            <StatCard value={allQuizzesPerformance.passRate.toFixed(1)} label1="Pass Rate" label2="(%)" />
+                            <StatCard value={allQuizzesPerformance.highest.toFixed(1)} label1="Highest" label2="(%)" />
+                            <StatCard value={allQuizzesPerformance.lowest.toFixed(1)} label1="Lowest" label2="(%)" />
                         </div>
                     ) : (
                         <div className="grid grid-cols-3 gap-2">
                             <StatCard value={singleQuizPerformance.number} label1={(singleQuizPerformance.name?.split(' ')[0] || 'Quiz')} label2={''} />
-                            <StatCard value={singleQuizPerformance.average.toFixed(2)} label1="Average" label2="(%)" />
-                            <StatCard value={String(singleQuizPerformance.median)} label1="Median" label2="(%)" />
-                            <StatCard value={String(singleQuizPerformance.passRate)} label1="Pass Rate" label2="(%)" />
-                            <StatCard value={String(singleQuizPerformance.highest)} label1="Highest" label2="(%)" />
-                            <StatCard value={String(singleQuizPerformance.lowest)} label1="Lowest" label2="(%)" />
+                            <StatCard value={singleQuizPerformance.average.toFixed(1)} label1="Average" label2="(%)" />
+                            <StatCard value={singleQuizPerformance.median.toFixed(1)} label1="Median" label2="(%)" />
+                            <StatCard value={singleQuizPerformance.passRate.toFixed(1)} label1="Pass Rate" label2="(%)" />
+                            <StatCard value={singleQuizPerformance.highest.toFixed(1)} label1="Highest" label2="(%)" />
+                            <StatCard value={singleQuizPerformance.lowest.toFixed(1)} label1="Lowest" label2="(%)" />
                         </div>
                     )}
 

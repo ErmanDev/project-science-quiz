@@ -94,17 +94,30 @@ router.post('/', async (req, res) => {
   db.data!.submissions.push(saved);
 
   // ---- Update user EXP/Level/Accuracy ----
+  let expGain = 0;
+  let oldLevel = 1;
+  let newLevel = 1;
+  let oldExp = 0;
+  
   db.data!.users = db.data!.users || [];
   const uIdx = db.data!.users.findIndex((u: any) => String(u.id) === String(studentId));
   if (uIdx > -1) {
     const u = { ...db.data!.users[uIdx] };
 
-    // Use EXP, not XP
-    const expGain = Number(saved.score || 0) * 10; // 10 EXP per point
-    u.exp = Number(u.exp || 0) + expGain;
+    // Store old values for comparison
+    oldExp = Number(u.exp || 0);
+    oldLevel = Number(u.level || 1);
+
+    // Calculate EXP based on quiz percentage
+    // Formula: percentage * multiplier (5 EXP per percentage point = max 500 EXP for 100%)
+    // This ensures students get more EXP for better performance
+    const percentage = Number(saved.percent || 0);
+    expGain = Math.round(percentage * 5); // 5 EXP per percentage point (0-500 EXP range)
+    u.exp = oldExp + expGain;
 
     // Level from EXP
-    u.level = Math.floor(Number(u.exp) / EXP_PER_LEVEL) + 1;
+    newLevel = Math.floor(Number(u.exp) / EXP_PER_LEVEL) + 1;
+    u.level = newLevel;
 
     // Accuracy recomputed across all submissions
     u.accuracy = recomputeAccuracyForStudent(String(studentId));
@@ -114,7 +127,14 @@ router.post('/', async (req, res) => {
   }
 
   await db.write();
-  return res.json(saved);
+  return res.json({
+    ...saved,
+    expGain,
+    oldLevel,
+    newLevel,
+    oldExp,
+    newExp: oldExp + expGain,
+  });
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Header from './dashboard/Header';
 import NotificationCard from './dashboard/NotificationCard';
 import LastQuiz from './dashboard/LastQuiz';
@@ -22,6 +22,7 @@ import { ClassStudent } from '../data/classStudentData';
 import TeamPlayersModal from './quiz/TeamPlayersModal';
 import { Conversation, ChatMessage } from '../App';
 import { TeacherProfileData } from './teacher/EditTeacherProfileModal';
+import { API_URL } from '../server/src/config';
 
 interface StudentDashboardProps {
   activeView: DashboardView;
@@ -36,9 +37,9 @@ interface StudentDashboardProps {
   doneQuizzes: DoneQuiz[];
   takingQuiz: (Quiz & { teamMembers?: string[] }) | null;
   onTakeQuiz: (quiz: (Quiz & { teamMembers?: string[] })) => void;
-  onQuizComplete: (quizId: number, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[]) => void;
+  onQuizComplete: (quizId: number, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[], expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number }) => void;
   badgeProgress: BadgeCategory[];
-  lastCompletedQuizStats: { quiz: DoneQuiz; earnedBadges: Badge[]; } | null;
+  lastCompletedQuizStats: { quiz: DoneQuiz; earnedBadges: Badge[]; expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number } } | null;
   onDismissCompletionScreen: () => void;
   profile: ProfileData;
   onSaveProfile: (newProfile: Partial<ProfileData>) => void;
@@ -84,15 +85,47 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [quizToViewDetails, setQuizToViewDetails] = useState<DoneQuiz | null>(null);
   const [quizForTeamSetup, setQuizForTeamSetup] = useState<Quiz | null>(null);
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-      {
-        id: 1,
-        icon: <BellIcon />,
-        title: t('notification'),
-        subtitle: t('newQuizNotification'),
-        description: t('lifeScience'),
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // Load announcements for the student's joined classes
+  useEffect(() => {
+    const me = (() => {
+      try { const raw = localStorage.getItem('currentUser'); return raw ? JSON.parse(raw) : null; } catch { return null; }
+    })();
+    const studentId = me?.id || me?.email;
+    if (!studentId) return;
+
+    let abort = false;
+    const loadAnnouncements = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/announcements?studentId=${encodeURIComponent(String(studentId))}`);
+        if (!res.ok) return;
+        const anns: Array<{ id: string; title: string; body: string; classId?: string }> = await res.json();
+        if (abort) return;
+        const mapped: Notification[] = anns.map(a => {
+          const klass = classes.find(c => String(c.id) === String(a.classId));
+          const subtitle = klass ? `${klass.name}${klass.section ? ' - ' + klass.section : ''}` : 'Announcement';
+          return {
+            id: Date.now() + Math.random(),
+            icon: <BellIcon />,
+            title: a.title || 'Announcement',
+            subtitle,
+            description: a.body || '',
+          };
+        });
+        setNotifications(mapped);
+      } catch {
+        // ignore
       }
-  ]);
+    };
+
+    loadAnnouncements();
+
+    // Refresh when "class:joined" event fires
+    const onJoined = () => loadAnnouncements();
+    window.addEventListener('class:joined', onJoined as EventListener);
+    return () => { abort = true; window.removeEventListener('class:joined', onJoined as EventListener); };
+  }, [classes, studentJoinedClassIds]);
   
   const studentConversations = useMemo(() => {
     return conversations.filter(c => 
@@ -149,6 +182,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       let completionQuizScores: { name: string; score: string }[] = [];
       let currentUserTeamName: string | undefined = undefined;
 
+      // Ensure reportsData has default structure to prevent errors
+      const safeReportsData = reportsData || {
+        singleQuizStudentScores: [],
+        allQuizzesStudentScores: [],
+      };
+
       if (lastCompletedQuizStats.quiz.mode === 'Team') {
           const currentClassId = studentJoinedClassIds[0];
           const classTeams = teamsData[currentClassId as keyof typeof teamsData] || {};
@@ -164,7 +203,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               let totalScore = 0;
               let memberCount = 0;
               members.forEach(memberName => {
-                  const scoreData = reportsData.singleQuizStudentScores.find(
+                  const scoreData = safeReportsData.singleQuizStudentScores?.find(
                       (s: any) => s.name === memberName && s.quizNumber === lastCompletedQuizStats.quiz.id
                   );
                   if (scoreData) {
@@ -176,7 +215,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               return { name: teamName, score: `${avgScore}%` };
           });
       } else {
-          completionQuizScores = reportsData.singleQuizStudentScores.filter(
+          completionQuizScores = (safeReportsData.singleQuizStudentScores || []).filter(
               (s: any) => s.quizNumber === lastCompletedQuizStats.quiz.id
           );
       }
@@ -217,6 +256,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
             setAppView={setAppView}
             onViewMessages={() => setView('chat')}
             conversations={studentConversations}
+            sectionName={(() => {
+              const firstJoined = studentJoinedClassIds[0];
+              const cls = classes.find(c => String(c.id) === String(firstJoined));
+              return cls ? `${cls.name}${cls.section ? ' - ' + cls.section : ''}` : undefined;
+            })()}
           />
         );
       case 'chat':
@@ -233,8 +277,35 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
         );
       case 'home':
       default:
+        // Filter classes that the student has joined
+        const joinedClasses = classes.filter(c => studentJoinedClassIds.includes(String(c.id)));
+        
         return (
           <>
+            {/* Joined Classes Section */}
+            {joinedClasses.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-lg font-bold text-gray-800 dark:text-white mb-3">
+                  {t('myClasses') || 'My Classes'}
+                </h2>
+                <div className="space-y-3">
+                  {joinedClasses.map((classData) => (
+                    <div
+                      key={classData.id}
+                      className="bg-gradient-to-r from-brand-mid-purple/90 to-brand-mid-purple/70 rounded-xl p-4 text-white border border-brand-light-purple/50 shadow-md"
+                    >
+                      <h3 className="font-bold text-lg mb-1">
+                        {classData.name}{classData.section ? ` - ${classData.section}` : ''}
+                      </h3>
+                      <p className="text-sm opacity-90">
+                        {t('classCode')}: {classData.code}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             {notifications.map((notification) => (
                 <NotificationCard
                     key={notification.id}
@@ -254,7 +325,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 onClick={() => setView('chat')}
               />
             )}
-            <LastQuiz />
+            <LastQuiz 
+              doneQuizzes={doneQuizzes}
+              reportsData={reportsData}
+              currentUserId={profile?.id}
+            />
           </>
         );
     }

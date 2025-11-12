@@ -1,6 +1,6 @@
 import { Question } from './teacherQuizQuestions';
 
-export type View = 'main' | 'student' | 'teacher' | 'forgotPassword' | 'verifyCode' | 'resetPassword' | 'passwordResetSuccess' | 'createAccount' | 'createTeacherAccount' | 'verifyAccount' | 'studentDashboard' | 'teacherDashboard' | 'help' | 'aboutUs' | 'privacyPolicy';
+export type View = 'main' | 'student' | 'teacher' | 'admin' | 'adminDashboard' | 'forgotPassword' | 'verifyCode' | 'resetPassword' | 'passwordResetSuccess' | 'createAccount' | 'createTeacherAccount' | 'verifyAccount' | 'studentDashboard' | 'teacherDashboard' | 'help' | 'aboutUs' | 'privacyPolicy';
 export type DashboardView = 'home' | 'quizzes' | 'rankings' | 'badges' | 'profile' | 'chat';
 
 export interface Quiz {

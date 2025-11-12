@@ -9,12 +9,14 @@ export interface TeacherProfileData {
     email: string;
     motto: string;
     avatar: string | null;
+    activeClassId?: string | null;
 }
 
 interface EditTeacherProfileModalProps {
   onClose: () => void;
   onSave: (newProfile: Partial<TeacherProfileData>) => void;
   profile: TeacherProfileData;
+  classes?: Array<{ id: string; name: string; section: string }>;
 }
 
 const Avatar: React.FC<{ src: string, isSelected?: boolean, onClick: () => void }> = ({ src, isSelected, onClick }) => {
@@ -43,9 +45,10 @@ const CustomAvatarUpload: React.FC<{ src: string | null, isSelected?: boolean, o
 );
 
 
-const EditTeacherProfileModal: React.FC<EditTeacherProfileModalProps> = ({ onClose, onSave, profile }) => {
+const EditTeacherProfileModal: React.FC<EditTeacherProfileModalProps> = ({ onClose, onSave, profile, classes = [] }) => {
     const [name, setName] = useState(profile.name);
     const [motto, setMotto] = useState(profile.motto);
+    const [activeClassId, setActiveClassId] = useState<string>(profile.activeClassId || '');
     const { t } = useTranslations();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +97,7 @@ const EditTeacherProfileModal: React.FC<EditTeacherProfileModalProps> = ({ onClo
         } else if (selectedAvatar !== 'initials') {
             finalAvatar = selectedAvatar;
         }
-        onSave({ name, motto, avatar: finalAvatar });
+        onSave({ name, motto, avatar: finalAvatar, activeClassId: activeClassId || null });
     };
 
     const getInitials = (name: string) => {
@@ -163,6 +166,19 @@ const EditTeacherProfileModal: React.FC<EditTeacherProfileModalProps> = ({ onClo
                             <div>
                                 <label className="text-sm font-semibold text-gray-300 mb-1 block">{t('motto')}</label>
                                 <input value={motto} onChange={(e) => setMotto(e.target.value)} className="w-full bg-[#130825] border border-brand-light-purple/50 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-glow focus:border-transparent transition-all duration-300" />
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-gray-300 mb-1 block">Active Class</label>
+                                <select
+                                    value={activeClassId}
+                                    onChange={(e) => setActiveClassId(e.target.value)}
+                                    className="w-full bg-[#130825] border border-brand-light-purple/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-glow focus:border-transparent transition-all duration-300"
+                                >
+                                    <option value="">{classes.length ? 'None' : 'No classes available'}</option>
+                                    {classes.map(c => (
+                                        <option key={c.id} value={c.id}>{`${c.name} - ${c.section}`}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 

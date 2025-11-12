@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FilterIcon, PodiumLaurel, ListLaurel, GenericListAvatar, AvatarRank1, AvatarRank2, AvatarRank3 } from '../icons';
 import { ProfileData } from '../StudentDashboard';
 import { useTranslations } from '../../hooks/useTranslations';
 import { ClassStudent } from '../../data/classStudentData';
 import { TeacherQuiz } from '../../data/teacherQuizzes';
+import { rankingsApi } from '../../src/api';
 
 const laurelColors: { [key: number]: string } = {
     1: '#FFD700', // Gold
@@ -36,14 +37,15 @@ const PodiumItem: React.FC<PodiumItemProps> = ({ rank, name, Avatar, order, elev
     </div>
 );
 
-const LeaderboardItem: React.FC<{rank: number, name: string, score: number, isTeam: boolean, isCurrentUser?: boolean}> = ({ rank, name, score, isTeam, isCurrentUser }) => (
-    <div className={`flex items-center justify-between py-2 px-3 rounded-lg ${isCurrentUser ? 'bg-brand-accent/10 dark:bg-brand-light-purple/50' : ''}`}>
-        <div className="flex items-center space-x-3">
-            <span className="font-bold text-sm w-6 text-center">{rank}</span>
-            <GenericListAvatar />
+const LeaderboardItem: React.FC<{rank: number, name: string, score: number, showPercent: boolean, isCurrentUser?: boolean}> = ({ rank, name, score, showPercent, isCurrentUser }) => (
+    <div className={`flex items-center justify-between py-3 px-4 rounded-lg border ${isCurrentUser ? 'bg-brand-accent/10 dark:bg-brand-light-purple/50 border-brand-accent/30' : 'bg-white dark:bg-brand-mid-purple/60 border-brand-light-purple/30'}`}>
+        <div className="flex items-center space-x-3 flex-1">
+            <div className="w-8 h-8 bg-brand-mid-purple dark:bg-brand-light-purple border border-brand-light-purple/50 rounded flex items-center justify-center flex-shrink-0">
+                <span className="font-bold text-sm text-white">{rank}</span>
+            </div>
             <span className={`font-semibold ${isCurrentUser ? 'text-gray-800 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>{name}</span>
         </div>
-        {isTeam ? <ListLaurel /> : <span className="font-bold text-brand-glow">{score.toFixed(isTeam ? 0 : 2)}%</span>}
+        <span className="font-bold text-brand-glow ml-2">{showPercent ? `${score.toFixed(2)}%` : Math.round(score)}</span>
     </div>
 );
 
@@ -164,16 +166,40 @@ interface RankingsScreenProps {
 const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, classRosters, studentJoinedClassIds, postedQuizzes, teamsData }) => {
     const [isFilterMenuOpen, setFilterMenuOpen] = useState(false);
     const { t } = useTranslations();
+    const [serverRankings, setServerRankings] = useState<any[]>([]);
     const [filters, setFilters] = useState({
         mode: 'SOLO' as 'SOLO' | 'TEAM' | 'CLASSROOM',
         scope: 'all' as 'all' | 'per',
         quizId: '',
     });
 
+    // Fetch server-side rankings (EXP-based) for the first joined class
+    useEffect(() => {
+        const classId = studentJoinedClassIds[0];
+        if (!classId) {
+            setServerRankings([]);
+            return;
+        }
+        rankingsApi.byClass(classId)
+            .then((res: any) => setServerRankings(Array.isArray(res?.rankings) ? res.rankings : []))
+            .catch(() => setServerRankings([]));
+    }, [studentJoinedClassIds.join(',')]);
+
+    // Map filter mode to quiz mode format
+    const modeMap: Record<'SOLO' | 'TEAM' | 'CLASSROOM', 'Solo' | 'Team' | 'Classroom'> = {
+        'SOLO': 'Solo',
+        'TEAM': 'Team',
+        'CLASSROOM': 'Classroom',
+    };
+
     const availableQuizzes = useMemo(() => {
         const classIds = new Set(studentJoinedClassIds);
-        return postedQuizzes.filter(quiz => quiz.postedToClasses?.some(c => classIds.has(c.id)));
-    }, [postedQuizzes, studentJoinedClassIds]);
+        const quizMode = modeMap[filters.mode];
+        return postedQuizzes.filter(quiz => 
+            quiz.postedToClasses?.some(c => classIds.has(c.id)) &&
+            quiz.mode === quizMode
+        );
+    }, [postedQuizzes, studentJoinedClassIds, filters.mode]);
 
     const rankedData = useMemo(() => {
         const currentClassId = studentJoinedClassIds[0];
@@ -181,6 +207,28 @@ const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, c
 
         const classStudentSet = new Set(classRosters[currentClassId]?.map(s => s.name) || []);
         if (classStudentSet.size === 0) return { top: [], list: [] };
+
+        const quizMode = modeMap[filters.mode];
+        
+        // Get quiz IDs that match the selected mode
+        const classIds = new Set(studentJoinedClassIds);
+        const matchingQuizIds = new Set(
+            postedQuizzes
+                .filter(quiz => 
+                    quiz.mode === quizMode &&
+                    quiz.postedToClasses?.some(c => classIds.has(c.id))
+                )
+                .map(quiz => String(quiz.id))
+        );
+
+        // Prefer server rankings (EXP) for SOLO/all view
+        if (filters.mode === 'SOLO' && filters.scope === 'all' && serverRankings.length) {
+            const list = serverRankings.map((r: any) => ({ rank: r.rank, name: r.name, score: Number(r.exp || 0) }));
+            const podiumAvatars: {[key: number]: React.FC} = { 1: AvatarRank1, 2: AvatarRank2, 3: AvatarRank3 };
+            const top3 = list.slice(0, 3).map((p: any) => ({ ...p, Avatar: podiumAvatars[p.rank] || GenericListAvatar }));
+            const podiumOrder = [top3.find(p => p.rank === 2), top3.find(p => p.rank === 1), top3.find(p => p.rank === 3)].filter(Boolean) as PodiumItemProps[];
+            return { top: podiumOrder, list: list.slice(3), percent: false };
+        }
 
         if (filters.mode === 'TEAM') {
             const teams = teamsData[currentClassId] || {};
@@ -190,16 +238,27 @@ const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, c
                 members.forEach(memberName => {
                     let scoreData;
                     if (filters.scope === 'all') {
-                        scoreData = reportsData.allQuizzesStudentScores.find((s: any) => s.name === memberName);
-                        if (scoreData) {
-                            totalScore += scoreData.average;
+                        // Filter by quiz mode when calculating team scores
+                        const allScores = (reportsData?.singleQuizStudentScores || [])
+                            .filter((s: any) => 
+                                s.name === memberName && 
+                                matchingQuizIds.has(String(s.quizNumber))
+                            );
+                        if (allScores.length > 0) {
+                            const total = allScores.reduce((sum: number, s: any) => sum + parseFloat(s.score.replace('%', '') || '0'), 0);
+                            const avg = total / allScores.length;
+                            totalScore += avg;
                             memberCountWithScore++;
                         }
                     } else if (filters.scope === 'per' && filters.quizId) {
-                        scoreData = reportsData.singleQuizStudentScores.find((s: any) => s.name === memberName && String(s.quizNumber) === filters.quizId);
-                        if (scoreData) {
-                            totalScore += parseFloat(scoreData.score);
-                            memberCountWithScore++;
+                        // Verify the selected quiz matches the mode
+                        const selectedQuiz = postedQuizzes.find(q => String(q.id) === filters.quizId);
+                        if (selectedQuiz && selectedQuiz.mode === quizMode) {
+                            scoreData = (reportsData?.singleQuizStudentScores || []).find((s: any) => s.name === memberName && String(s.quizNumber) === filters.quizId);
+                            if (scoreData) {
+                                totalScore += parseFloat(scoreData.score.replace('%', '') || '0');
+                                memberCountWithScore++;
+                            }
                         }
                     }
                 });
@@ -212,15 +271,38 @@ const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, c
 
         let sourceData: any[] = [];
         if (filters.scope === 'all') {
-            sourceData = reportsData.allQuizzesStudentScores
-                .filter((s: any) => classStudentSet.has(s.name))
-                .map((s: any) => ({ name: s.name, score: s.average }))
+            // Filter singleQuizStudentScores by quiz mode, then calculate averages per student
+            const modeFilteredScores = (reportsData?.singleQuizStudentScores || [])
+                .filter((s: any) => 
+                    classStudentSet.has(s.name) && 
+                    matchingQuizIds.has(String(s.quizNumber))
+                );
+            
+            // Group by student name and calculate average
+            const studentScoresMap = new Map<string, number[]>();
+            modeFilteredScores.forEach((s: any) => {
+                const score = parseFloat(s.score.replace('%', '') || '0');
+                if (!studentScoresMap.has(s.name)) {
+                    studentScoresMap.set(s.name, []);
+                }
+                studentScoresMap.get(s.name)!.push(score);
+            });
+            
+            sourceData = Array.from(studentScoresMap.entries())
+                .map(([name, scores]) => ({
+                    name,
+                    score: scores.reduce((sum, s) => sum + s, 0) / scores.length
+                }))
                 .sort((a: any, b: any) => b.score - a.score);
         } else if (filters.scope === 'per' && filters.quizId) {
-            sourceData = reportsData.singleQuizStudentScores
-                .filter((s: any) => classStudentSet.has(s.name) && String(s.quizNumber) === filters.quizId)
-                .map((s: any) => ({ name: s.name, score: parseFloat(s.score) }))
-                .sort((a: any, b: any) => b.score - a.score);
+            // Verify the selected quiz matches the mode
+            const selectedQuiz = postedQuizzes.find(q => String(q.id) === filters.quizId);
+            if (selectedQuiz && selectedQuiz.mode === quizMode) {
+                sourceData = (reportsData?.singleQuizStudentScores || [])
+                    .filter((s: any) => classStudentSet.has(s.name) && String(s.quizNumber) === filters.quizId)
+                    .map((s: any) => ({ name: s.name, score: parseFloat(s.score.replace('%', '') || '0') }))
+                    .sort((a: any, b: any) => b.score - a.score);
+            }
         }
 
         const rankedList = sourceData.map((s, i) => ({ ...s, rank: i + 1 }));
@@ -229,9 +311,9 @@ const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, c
         const top3 = rankedList.slice(0, 3).map(p => ({ ...p, Avatar: podiumAvatars[p.rank] || GenericListAvatar }));
         const podiumOrder = [top3.find(p => p.rank === 2), top3.find(p => p.rank === 1), top3.find(p => p.rank === 3)].filter(Boolean) as PodiumItemProps[];
 
-        return { top: podiumOrder, list: rankedList.slice(3) };
+        return { top: podiumOrder, list: rankedList.slice(3), percent: true };
 
-    }, [filters, reportsData, classRosters, studentJoinedClassIds, teamsData]);
+    }, [filters, reportsData, classRosters, studentJoinedClassIds, teamsData, serverRankings, postedQuizzes]);
 
 
     return (
@@ -263,7 +345,7 @@ const RankingsScreen: React.FC<RankingsScreenProps> = ({ profile, reportsData, c
                         rank={player.rank} 
                         name={player.name}
                         score={player.score}
-                        isTeam={filters.mode === 'TEAM'}
+                        showPercent={Boolean((rankedData as any).percent)}
                         isCurrentUser={player.name === profile.name}
                     />
                 ))}

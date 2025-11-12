@@ -15,8 +15,10 @@ import HelpScreen from './components/HelpScreen';
 import AboutUsScreen from './components/AboutUsScreen';
 import PrivacyPolicyScreen from './components/PrivacyPolicyScreen';
 import TeacherLogin from './components/TeacherLogin';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
 import TeacherDashboard from './components/teacher/TeacherDashboard';
-import { ClassData } from './components/teacher/ClassroomScreen';
+import { ClassData } from './components/ClassCard';
 import { ClassStudent } from './data/classStudentData';
 import { TeacherQuiz } from './data/teacherQuizzes';
 import { Quiz, DoneQuiz, View, DashboardView } from './data/quizzes';
@@ -25,6 +27,7 @@ import { TeacherProfileData } from './components/teacher/EditTeacherProfileModal
 import { usePersistentState } from './hooks/usePersistentState';
 import { API_URL } from './server/src/config';
 import QuizTakingScreen from './components/quiz/QuizTakingScreen';
+import { badgesApi } from './src/api';
 
 type ServerSubmission = {
   id: string;
@@ -105,23 +108,35 @@ const App: React.FC = () => {
   const [takingTeam, setTakingTeam] = useState<string[] | undefined>(undefined);
 
   // badges / profile
+  // Reset badge progress once: clear localStorage to use default badgeData (all progress = 0)
+  useEffect(() => {
+    const stored = localStorage.getItem('sciquest_badgeProgress');
+    if (stored) {
+      // Clear stored badge progress to reset to default (all progress = 0)
+      localStorage.removeItem('sciquest_badgeProgress');
+    }
+  }, []);
+  
   const [badgeProgress, setBadgeProgress] = usePersistentState<BadgeCategory[]>('sciquest_badgeProgress', badgeData);
-  const [lastCompletedQuizStats, setLastCompletedQuizStats] = usePersistentState<{ quiz: DoneQuiz; earnedBadges: Badge[]; } | null>('sciquest_lastCompletedQuizStats', null);
+  const [lastCompletedQuizStats, setLastCompletedQuizStats] = usePersistentState<{ quiz: DoneQuiz; earnedBadges: Badge[]; expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number } } | null>('sciquest_lastCompletedQuizStats', null);
 
   const [studentProfile, setStudentProfile] = usePersistentState<ProfileData>('sciquest_studentProfile', {
     name: 'Student', bio: '', avatar: null, level: 1, xp: 0, accuracy: 0, streaks: 0,
   });
   const [teacherProfile, setTeacherProfile] = usePersistentState<TeacherProfileData>('sciquest_teacherProfile', {
-    name: 'Teacher', email: 'teacher@gmail.com', motto: '', avatar: null,
+    name: 'Teacher', email: 'teacher@gmail.com', motto: '', avatar: null, activeClassId: '',
   });
 
   const [conversations, setConversations] = usePersistentState('sciquest_conversations', [] as {
     id: string; participantNames: string[]; messages: { id: number; text: string; senderName: string; timestamp: Date }[]; title?: string;
   }[]);
 
-  const [reportsData] = usePersistentState('sciquest_reportsData', {
-    singleQuizStudentScores: [] as { name: string; quizNumber: number | string; score: string; classId: string }[],
-    allQuizzesStudentScores: [] as { name: string; average: number; classId: string }[],
+  const [reportsData, setReportsData] = useState<{
+    singleQuizStudentScores: Array<{ name: string; quizNumber: number | string; score: string; classId: string; avatar?: string | null }>;
+    allQuizzesStudentScores: Array<{ name: string; average: number; classId: string; avatar?: string | null }>;
+  }>({
+    singleQuizStudentScores: [],
+    allQuizzesStudentScores: [],
   });
 
   // theme
@@ -145,14 +160,88 @@ const App: React.FC = () => {
       }
     });
     loadTeacherQuizzes();
+    loadReportsData();
 
     if (me?.id) {
+      // Refresh student profile (full name, bio, and section via users API)
+      (async () => {
+        try {
+          const ures = await fetch(`${API_URL}/api/users/public/${encodeURIComponent(String(me.id))}`);
+          if (ures.ok) {
+            const u = await ures.json();
+            setStudentProfile(prev => ({
+              ...prev,
+              name: u?.name || prev.name,
+              bio: u?.bio ?? prev.bio,
+              level: typeof u?.level === 'number' ? u.level : (prev.level || 1),
+              xp: typeof u?.xp === 'number' ? u.xp : (typeof u?.exp === 'number' ? u.exp : (prev.xp || 0)),
+              accuracy: typeof u?.accuracy === 'number' ? u.accuracy : (prev.accuracy || 0),
+            }));
+            // If the API returned class info, prefer it to set the first joined class id
+            if (u?.class?.id) {
+              setStudentJoinedClassIds(prev => {
+                const next = new Set(prev);
+                next.add(String(u.class.id));
+                return Array.from(next);
+              });
+            }
+          }
+        } catch {}
+      })();
+      // Optimistically set from localStorage user immediately
+      setTeacherProfile(prev => ({
+        ...prev,
+        name: me?.name || prev.name,
+        email: me?.email || prev.email,
+      }));
+      // refresh teacher profile (name/email) dynamically from server if logged in
+      (async () => {
+        try {
+          const ures = await fetch(`${API_URL}/api/users/${encodeURIComponent(String(me.id))}`);
+          if (ures.ok) {
+            const u = await ures.json();
+            setTeacherProfile(prev => ({
+              ...prev,
+              name: u?.name || prev.name,
+              email: u?.email || prev.email,
+            }));
+          }
+        } catch (e) {
+          // non-fatal
+          console.warn('[App] Failed to refresh teacher profile', e);
+        }
+      })();
       loadStudentQuizzesBuckets(me.id);
+      loadBadgeProgress(me.id);
     } else {
       setStudentNewQuizzes([]); setStudentMissedQuizzes([]); setStudentDoneQuizzes([]); setStudentJoinedClassIds([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+
+  // Refresh student quizzes immediately after joining a class
+  useEffect(() => {
+    const handler = (e: any) => {
+      const me = getCurrentUser();
+      if (me?.id) {
+        loadStudentQuizzesBuckets(me.id);
+        loadBadgeProgress(me.id);
+      }
+    };
+    window.addEventListener('class:joined' as any, handler);
+    return () => window.removeEventListener('class:joined' as any, handler);
+  }, []);
+
+  // Refresh badge progress when badges view is accessed
+  useEffect(() => {
+    if (view === 'studentDashboard' && dashboardView === 'badges') {
+      const me = getCurrentUser();
+      if (me?.id) {
+        loadBadgeProgress(me.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardView]);
 
   async function loadClasses() {
     try {
@@ -169,11 +258,18 @@ const App: React.FC = () => {
     try {
       const res = await fetch(`${API_URL}/api/class-students`);
       const items: Array<{ id: string; classId: string; studentId: string }> = res.ok ? await res.json() : [];
+      
+      // Fetch all users to get student names
+      const usersRes = await fetch(`${API_URL}/api/users?role=student`);
+      const users: Array<{ id: string; name: string }> = usersRes.ok ? await usersRes.json() : [];
+      const userMap = new Map(users.map(u => [String(u.id), u.name]));
+      
       const byClass: Record<string, ClassStudent[]> = {};
       for (const r of items || []) {
         const key = String(r.classId);
         if (!byClass[key]) byClass[key] = [];
-        byClass[key].push({ id: r.id, name: r.studentId, level: 1, streak: 0, accuracy: '0%', lastActive: '—' } as any);
+        const studentName = userMap.get(String(r.studentId)) || r.studentId;
+        byClass[key].push({ id: r.id, name: studentName, level: 1, streak: 0, accuracy: '0%', lastActive: '—' } as any);
       }
       setClassRosters(byClass);
       return byClass;
@@ -201,6 +297,34 @@ const App: React.FC = () => {
     } catch { setDraftQuizzes([]); setPostedQuizzes([]); }
   }
 
+  async function loadReportsData() {
+    try {
+      const res = await fetch(`${API_URL}/api/reports`);
+      if (res.ok) {
+        const data = await res.json();
+        setReportsData({
+          singleQuizStudentScores: data.singleQuizStudentScores || [],
+          allQuizzesStudentScores: data.allQuizzesStudentScores || [],
+        });
+      } else {
+        setReportsData({ singleQuizStudentScores: [], allQuizzesStudentScores: [] });
+      }
+    } catch (error) {
+      console.error('[App] Failed to load reports data:', error);
+      setReportsData({ singleQuizStudentScores: [], allQuizzesStudentScores: [] });
+    }
+  }
+
+  async function loadBadgeProgress(studentId: string) {
+    try {
+      const progress = await badgesApi.getProgress(studentId);
+      setBadgeProgress(progress);
+    } catch (error) {
+      console.error('[App] Failed to load badge progress:', error);
+      // Keep existing badge progress on error
+    }
+  }
+
   async function loadStudentQuizzesBuckets(studentId: string) {
     try {
       // classes joined
@@ -209,10 +333,18 @@ const App: React.FC = () => {
       const classIds = uniq((roster || []).map(r => String(r.classId)));
       setStudentJoinedClassIds(classIds);
 
-      // posted quizzes
+      // posted quizzes - only show quizzes that:
+      // 1. Belong to at least one class (have non-empty classIds array)
+      // 2. The student has joined at least one of those classes
       const qRes = await fetch(`${API_URL}/api/quizzes?status=posted`);
       const postedAll: ServerQuizSummary[] = qRes.ok ? await qRes.json() : [];
-      const posted = postedAll.filter(q => (q.classIds || []).some(cid => classIds.includes(String(cid))));
+      const posted = postedAll.filter(q => {
+        // Only show quizzes that have classIds and the student is in at least one of those classes
+        const quizClassIds = Array.isArray(q.classIds) ? q.classIds : [];
+        return quizClassIds.length > 0 && 
+               classIds.length > 0 && 
+               quizClassIds.some(cid => classIds.includes(String(cid)));
+      });
 
       // submissions
       const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(studentId)}`);
@@ -227,6 +359,7 @@ const App: React.FC = () => {
         questions: (q.questions || []).map(it => ({
           id: Number(it.id),
           type: 'multiple-choice',
+          category: 'Earth and Space',
           question: '',
           options: [],
           answer: '',
@@ -276,6 +409,7 @@ const App: React.FC = () => {
       });
       if (!res.ok) throw new Error('Failed to post quiz');
       await loadTeacherQuizzes();
+      await loadReportsData();
       const me = getCurrentUser(); if (me?.id) await loadStudentQuizzesBuckets(me.id);
     } catch (e) { console.error(e); }
   };
@@ -284,6 +418,7 @@ const App: React.FC = () => {
       const res = await fetch(`${API_URL}/api/quizzes/${quizId}/unpost`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to unpost quiz');
       await loadTeacherQuizzes();
+      await loadReportsData();
       const me = getCurrentUser(); if (me?.id) await loadStudentQuizzesBuckets(me.id);
     } catch (e) { console.error(e); }
   };
@@ -292,6 +427,8 @@ const App: React.FC = () => {
   const handleQuizComplete = async (
     quizId: number | string,
     _results: { questionId: number; wasCorrect: boolean }[],
+    _teamMembers?: string[],
+    expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number },
   ) => {
     // close taking screen
     setTakingQuizId(null);
@@ -305,6 +442,8 @@ const App: React.FC = () => {
     const me = getCurrentUser();
     if (me?.id) {
       await loadStudentQuizzesBuckets(me.id);
+      await loadBadgeProgress(me.id);
+      await loadReportsData(); // Refresh reports after quiz completion
       try {
         const ures = await fetch(`${API_URL}/api/users/${encodeURIComponent(String(me.id))}`);
         if (ures.ok) {
@@ -312,13 +451,61 @@ const App: React.FC = () => {
           setStudentProfile(prev => ({
             ...prev,
             name: u.name || prev.name,
-            level: u.level ?? prev.level,
-            xp: u.xp ?? prev.xp,
-            accuracy: u.accuracy ?? prev.accuracy,
+            level: typeof u.level === 'number' ? u.level : (prev.level || 1),
+            xp: typeof u.xp === 'number' ? u.xp : (typeof u.exp === 'number' ? u.exp : (prev.xp || 0)),
+            accuracy: typeof u.accuracy === 'number' ? u.accuracy : (prev.accuracy || 0),
           }));
         }
       } catch (e) {
         console.error('[App] refresh user failed', e);
+      }
+      
+      // Set completion stats with EXP info if available
+      // Get submissions to find the quiz score
+      let submissions: ServerSubmission[] = [];
+      try {
+        const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(String(me.id))}`);
+        if (sRes.ok) {
+          submissions = await sRes.json();
+        }
+      } catch (e) {
+        console.error('[App] Failed to load submissions for completion screen', e);
+      }
+      
+      // Wait a bit for quizzes to load, then set completion stats
+      if (expInfo) {
+        setTimeout(() => {
+          // Get the done quiz from the refreshed list
+          const doneQuiz = studentDoneQuizzes.find(q => String(q.id) === String(quizId));
+          if (doneQuiz) {
+            setLastCompletedQuizStats({
+              quiz: doneQuiz,
+              earnedBadges: [], // Badges would be calculated elsewhere
+              expInfo,
+            });
+          } else {
+            // If not found, create a minimal done quiz from the quizId
+            // Try to get score from submission if available
+            const submission = submissions.find(s => String(s.quizId) === String(quizId));
+            const scoreStr = submission 
+              ? `${submission.score ?? 0}/${submission.totalPoints ?? 0}`
+              : '0/0';
+            
+            setLastCompletedQuizStats({
+              quiz: {
+                id: quizId as any,
+                topic: 'Quiz',
+                subpart: 'Normal',
+                questions: [],
+                score: scoreStr,
+                questionResults: [],
+                mode: 'Solo', // Default mode
+              },
+              earnedBadges: [],
+              expInfo,
+            });
+          }
+        }, 100);
       }
     }
   };
@@ -337,7 +524,7 @@ const App: React.FC = () => {
 
   /** Layout classes */
   const mainClasses =
-    (view === 'studentDashboard' || view === 'teacherDashboard')
+    (view === 'studentDashboard' || view === 'teacherDashboard' || view === 'adminDashboard')
       ? 'min-h-screen w-full bg-gray-50 dark:bg-brand-deep-purple font-sans'
       : 'min-h-screen w-full bg-brand-deep-purple font-sans';
 
@@ -365,7 +552,7 @@ const App: React.FC = () => {
         <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent to-purple-600 rounded-3xl blur-xl opacity-30"></div>
         <div className="relative bg-brand-mid-purple/60 backdrop-blur-sm border border-brand-light-purple/50 rounded-2xl text-white p-8 w-full flex flex-col items-center shadow-lg overflow-hidden">
           <>
-            <SciQuestLogo />
+            <SciQuestLogo onLogoClick={() => setView('admin')} />
             <p className="mt-2 text-gray-300 text-center">{t('learnPlayMaster')}</p>
             <div className="w-full space-y-4 mt-8">
               <LoginButton onClick={() => { setView('student'); setAuthFlowReturnView('student'); }}>
@@ -404,7 +591,25 @@ const App: React.FC = () => {
             isDarkMode={isDarkMode}
             onToggleDarkMode={() => setIsDarkMode(p => !p)}
             classes={classes}
-            onAddStudentToClass={() => loadClassRosters()}
+            onAddStudentToClass={async (classId) => {
+              try {
+                // Ensure class rosters reflect membership
+                const rosters = await loadClassRosters();
+                // Update joined class ids immediately in UI
+                setStudentJoinedClassIds(prev => {
+                  const next = new Set(prev);
+                  next.add(String(classId));
+                  return Array.from(next);
+                });
+                // Optionally refresh posted quizzes bucket to show relevant quizzes
+                const me = getCurrentUser();
+                if (me?.id) {
+                  await loadStudentQuizzesBuckets(me.id);
+                }
+              } catch {
+                // ignore
+              }
+            }}
             newQuizzes={studentNewQuizzes}
             missedQuizzes={studentMissedQuizzes}
             doneQuizzes={studentDoneQuizzes}
@@ -443,8 +648,9 @@ const App: React.FC = () => {
           onDeleteDraftQuiz={() => loadTeacherQuizzes()}
           onPostQuiz={handlePostQuiz}
           onUnpostQuiz={handleUnpostQuiz}
-          reportsData={undefined as any}
-          profile={{ name: 'Teacher', email: 'teacher@gmail.com', motto: '', avatar: null }}
+          reportsData={reportsData}
+          profile={teacherProfile}
+          onSaveProfile={(np) => setTeacherProfile(prev => ({ ...prev, ...np }))}
           conversations={conversations}
           onSendMessage={() => {}}
           onSendMessageToConversation={() => {}}
@@ -473,6 +679,24 @@ const App: React.FC = () => {
             onLogin={() => setView('teacherDashboard')}
           />
         </CenteredCard>
+      ) : view === 'admin' ? (
+        <CenteredCard>
+          <AdminLogin
+            onBack={() => setView('main')}
+            onLogin={() => {
+              setView('adminDashboard');
+            }}
+          />
+        </CenteredCard>
+      ) : view === 'adminDashboard' ? (
+        <AdminDashboard
+          onBackToLanding={() => setView('main')}
+          onLogout={() => {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            setView('main');
+          }}
+        />
       ) : view === 'forgotPassword' ? (
         <CenteredCard>
           <ForgotPassword onBack={() => setView(authFlowReturnView)} onSendCode={() => setView('verifyCode')} />

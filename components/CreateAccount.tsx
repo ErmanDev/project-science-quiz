@@ -43,6 +43,7 @@ const CreateAccount: React.FC<CreateAccountProps> = ({ onBack, onAccountCreateSu
           name: fullName,
           password,
           role: 'student',
+          studentId,
         }),
       });
 

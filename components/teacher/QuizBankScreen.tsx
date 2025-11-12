@@ -422,7 +422,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
   ) => {
     if (!teacherId) return;
     try {
-      await apiCreateQuiz({
+      const created = await apiCreateQuiz({
         title: config.name,
         type: `${config.category} Game` as TeacherQuiz['type'],
         mode: config.mode,
@@ -432,6 +432,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
       });
       await refreshQuizzes();
       setActiveQuizFilter('draft');
+      setQuizToPost(created as TeacherQuiz);
       setView('main');
     } catch (e: any) {
       setError(e?.message || 'Failed to create quiz');
@@ -452,7 +453,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
   const handleVaultSelectedForNormal = async (selected: Question[]) => {
     if (!newQuizConfig || !teacherId) return;
     try {
-      await apiCreateQuiz({
+      const created = await apiCreateQuiz({
         title: newQuizConfig.name,
         type: 'Normal',
         mode: newQuizConfig.mode,
@@ -465,6 +466,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
       setShowVaultSelector(false);
       setView('main');
       setNewQuizConfig(null);
+      setQuizToPost(created as TeacherQuiz);
     } catch (e: any) {
       setError(e?.message || 'Failed to create quiz');
     }
@@ -475,7 +477,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
     if (!newQuizConfig || !teacherId) return;
     const selected = questions.filter(q => selectedIds.map(String).includes(String(q.id)));
     try {
-      await apiCreateQuiz({
+      const created = await apiCreateQuiz({
         title: newQuizConfig.name,
         type: newQuizConfig.category === 'Normal' ? 'Normal' : (`${newQuizConfig.category} Game` as TeacherQuiz['type']),
         mode: newQuizConfig.mode,
@@ -485,6 +487,7 @@ const QuizBankScreen: React.FC<QuizBankScreenProps> = ({ classes }) => {
       });
       await refreshQuizzes();
       setActiveQuizFilter('draft');
+      setQuizToPost(created as TeacherQuiz);
       setView('main');
     } catch (e: any) {
       setError(e?.message || 'Failed to create quiz');

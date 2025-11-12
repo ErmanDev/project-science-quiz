@@ -2,7 +2,7 @@ export type Role = 'teacher' | 'student' | 'admin';
 
 
 export interface User {
-    id: string;
+    id: string; // Student ID or Employee ID from registration (used as primary key)
     role: Role;
     email: string;
     name: string;

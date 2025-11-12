@@ -33,6 +33,7 @@ interface ProfileScreenProps {
   setAppView: (view: View) => void;
   onViewMessages: () => void;
   conversations: Conversation[];
+  sectionName?: string;
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -44,6 +45,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   setAppView,
   onViewMessages,
   conversations,
+  sectionName,
 }) => {
   const [isEditModalOpen, setEditModalOpen] = useState(false);
   const [isSettingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -129,12 +131,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   <PencilIcon />
                 </button>
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('bioLabel')}: "{profile?.bio ?? ''}"
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('sectionLabel')}: Fortitude
-              </p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('bioLabel')}: "{profile?.bio ?? ''}"</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('sectionLabel')}: {sectionName || '—'}</p>
             </div>
           </div>
           <button onClick={() => setSettingsModalOpen(true)} aria-label="Settings">

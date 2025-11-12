@@ -55,9 +55,11 @@ export const en = {
 
   // Dashboard
   joinClass: 'Join Class',
+  myClasses: 'My Classes',
   notification: 'Notification',
   newQuizNotification: 'New Quiz!!!',
   lifeScience: 'Life Science...',
+  enterClassCode: 'Enter class code',
   message: 'Message',
   announcement: 'Announcement',
   announcements: 'Announcements',

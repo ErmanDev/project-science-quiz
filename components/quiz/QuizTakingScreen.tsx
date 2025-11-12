@@ -16,7 +16,7 @@ type PlayQuiz = {
 interface QuizTakingScreenProps {
   quizId: string | number;
   teamMembers?: string[];
-  onQuizComplete: (quizId: number | string, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[]) => void;
+  onQuizComplete: (quizId: number | string, results: { questionId: number; wasCorrect: boolean }[], teamMembers?: string[], expInfo?: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number }) => void;
 }
 
 const FeedbackModal: React.FC<{
@@ -255,6 +255,7 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
     } catch {}
 
     // POST to /api/submissions (server will update XP/level/accuracy)
+    let expInfo: { expGain: number; oldLevel: number; newLevel: number; oldExp: number; newExp: number } | undefined;
     try {
       const payload = {
         quizId: quiz.id,
@@ -274,6 +275,16 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
       } else {
         const saved = await res.json();
         console.log('[QuizTakingScreen] submission saved:', saved);
+        // Capture EXP/level info from server response
+        if (saved.expGain !== undefined) {
+          expInfo = {
+            expGain: saved.expGain,
+            oldLevel: saved.oldLevel || 1,
+            newLevel: saved.newLevel || 1,
+            oldExp: saved.oldExp || 0,
+            newExp: saved.newExp || 0,
+          };
+        }
       }
     } catch (e) {
       console.error('[QuizTakingScreen] submission error:', e);
@@ -282,7 +293,7 @@ const QuizTakingScreen: React.FC<QuizTakingScreenProps> = ({ quizId, teamMembers
     // IMPORTANT: no client-side XP update here. Server is source of truth.
 
     // Notify parent so it can close the quiz modal / move to Done
-    onQuizComplete(quiz.id, results, quiz.teamMembers);
+    onQuizComplete(quiz.id, results, quiz.teamMembers, expInfo);
   };
 
   const handleNextQuestionFromModal = () => {

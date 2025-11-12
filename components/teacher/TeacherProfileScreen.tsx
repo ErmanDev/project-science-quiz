@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PencilIcon, ChevronRightIcon } from '../icons';
 import { useTranslations } from '../../hooks/useTranslations';
-import { ClassData } from './ClassroomScreen';
+import { ClassData } from '../ClassCard';
 import { TeacherQuiz } from '../../data/teacherQuizzes';
 import EditTeacherProfileModal, { TeacherProfileData } from './EditTeacherProfileModal';
 import TeacherSettingsModal from './TeacherSettingsModal';
 import { TeacherDashboardView } from './TeacherBottomNav';
 import { View } from '../../data/quizzes';
 import { Conversation } from '../../App';
+import { API_URL } from '../../server/src/config';
 
 const TeacherSettingsIcon: React.FC = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24">
@@ -75,6 +76,49 @@ const TeacherProfileScreen: React.FC<TeacherProfileScreenProps> = ({
     ? classes.reduce((sum, c) => sum + (Number(c?.studentCount) || 0), 0)
     : 0;
   const totalQuizzes = Array.isArray(quizzes) ? quizzes.length : 0;
+  const [quizCount, setQuizCount] = useState<number>(totalQuizzes);
+
+  useEffect(() => {
+    setQuizCount(totalQuizzes);
+  }, [totalQuizzes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const teacherId = (() => {
+      try {
+        const raw = localStorage.getItem('currentUser');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return (
+          (parsed?.id && String(parsed.id)) ||
+          (parsed?.email && String(parsed.email)) ||
+          null
+        );
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!teacherId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/quizzes?teacherId=${encodeURIComponent(teacherId)}`);
+        if (!res.ok) throw new Error('Failed to load quizzes');
+        const data = await res.json();
+        if (!cancelled) {
+          setQuizCount(Array.isArray(data) ? data.length : totalQuizzes);
+        }
+      } catch {
+        if (!cancelled) setQuizCount(totalQuizzes);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []); // run when profile screen mounts
 
   const latestMessageData = useMemo(() => {
     if (!conversations || conversations.length === 0) return null;
@@ -148,7 +192,7 @@ const TeacherProfileScreen: React.FC<TeacherProfileScreenProps> = ({
         <div className="flex justify-center space-x-4 mt-8">
           <StatBox value={totalClasses} label={t('classes')} />
           <StatBox value={totalStudents} label={t('students')} />
-          <StatBox value={totalQuizzes} label={t('quizzes')} />
+          <StatBox value={quizCount} label={t('quizzes')} />
         </div>
 
         <button
@@ -189,6 +233,7 @@ const TeacherProfileScreen: React.FC<TeacherProfileScreenProps> = ({
           profile={profile}
           onClose={() => setEditModalOpen(false)}
           onSave={handleSaveProfile}
+          classes={classes}
         />
       )}
       {isSettingsModalOpen && (

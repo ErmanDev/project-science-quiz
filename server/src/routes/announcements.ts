@@ -3,12 +3,32 @@ import db from '../db';
 
 const router = Router();
 
-// GET /api/announcements?classId=...
+// GET /api/announcements?classId=...&studentId=...
+// - If classId is provided => filter announcements for that class
+// - If studentId is provided => returns announcements for all classes the student is a member of
+// - If both are provided => intersection (i.e., announcements for that class only, still validating membership list)
 router.get('/', async (req, res) => {
   await db.read();
-  const { classId } = req.query;
+  const { classId, studentId } = req.query as { classId?: string; studentId?: string };
+
   let list = db.data.announcements || [];
-  if (classId) list = list.filter(a => a.classId === String(classId));
+
+  // Filter by classId first if supplied
+  if (classId) list = list.filter(a => String(a.classId) === String(classId));
+
+  // If studentId is supplied, narrow to classes they belong to
+  if (studentId) {
+    const memberships = (db.data.classStudents || []).filter(
+      (m: any) =>
+        String(m.studentId ?? m.userId ?? m.id) === String(studentId)
+    );
+    const classIds = new Set(memberships.map((m: any) => String(m.classId)));
+    list = list.filter(a => a.classId && classIds.has(String(a.classId)));
+  }
+
+  // Newest first
+  list.sort((a: any, b: any) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
   res.json(list);
 });
 

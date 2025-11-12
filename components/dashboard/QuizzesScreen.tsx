@@ -183,6 +183,16 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
         const allPosted: ServerQuiz[] = await qRes.json();
         console.log('[QuizzesScreen] fetched posted quizzes:', allPosted);
 
+        // Additional client-side filtering to ensure:
+        // 1. Quiz belongs to at least one class (has non-empty classIds)
+        // 2. Student has joined at least one of those classes
+        const filteredPosted = allPosted.filter(q => {
+          const quizClassIds = Array.isArray(q.classIds) ? q.classIds : [];
+          return quizClassIds.length > 0 && 
+                 classIds.length > 0 && 
+                 quizClassIds.some(cid => classIds.includes(String(cid)));
+        });
+
         const sRes = await fetch(`${API_URL}/api/submissions?studentId=${encodeURIComponent(studentId)}`);
         if (!sRes.ok) throw new Error('Failed to load submissions');
         const submissions: ServerSubmission[] = await sRes.json();
@@ -203,7 +213,7 @@ const QuizzesScreen: React.FC<QuizzesScreenProps> = ({ onTakeQuiz, onViewDetails
         const _missed: ClientQuizNew[] = [];
         const _done: ClientQuizDone[] = [];
 
-        for (const q of allPosted) {
+        for (const q of filteredPosted) {
           const sub = subByQuizId.get(q.id);
           if (sub) {
             _done.push({ ...toClient(q), score: `${Math.round(sub.score)}%` });

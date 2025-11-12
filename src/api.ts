@@ -1,6 +1,6 @@
 // Simple API client to talk to the new backend
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
 import { API_URL } from '../server/src/config';
+const API_BASE = import.meta.env.VITE_API_BASE || `${API_URL}/api`;
 
 let token: string | null = null;
 
@@ -34,6 +34,14 @@ export const api = {
   classStudents: (classId: string) => request(`/classes/${classId}/students`),
   messages: () => request('/messages'),
   badges: () => request('/badges')
+};
+
+export const rankingsApi = {
+  byClass: (classId: string) => request(`/rankings?classId=${encodeURIComponent(classId)}`),
+};
+
+export const badgesApi = {
+  getProgress: (studentId: string) => request(`/badges/${encodeURIComponent(studentId)}`),
 };
 
 export async function apiFindClassByCode(code: string) {

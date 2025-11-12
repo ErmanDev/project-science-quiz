@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { API_URL } from '../../server/src/config';
-import type { ClassData } from '../teacher/ClassroomScreen';
+import type { ClassData } from '../ClassCard';
 import { useTranslations } from '../../hooks/useTranslations';
 
 interface JoinClassModalProps {

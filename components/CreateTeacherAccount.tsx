@@ -43,6 +43,7 @@ const CreateTeacherAccount: React.FC<CreateTeacherAccountProps> = ({ onBack, onA
           name: fullName,
           password,
           role: 'teacher',
+          employeeId,
         }),
       });
 

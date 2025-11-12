@@ -1,10 +1,17 @@
 
 import React from 'react';
 
-const SciQuestLogo: React.FC = () => {
+interface SciQuestLogoProps {
+  onLogoClick?: () => void;
+}
+
+const SciQuestLogo: React.FC<SciQuestLogoProps> = ({ onLogoClick }) => {
   return (
     <div className="flex flex-col items-center">
-      <div className="w-20 h-20 mb-4">
+      <div 
+        className={`w-20 h-20 mb-4 ${onLogoClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+        onClick={onLogoClick}
+      >
         <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="flaskGradient" x1="0.5" y1="0" x2="0.5" y2="1">

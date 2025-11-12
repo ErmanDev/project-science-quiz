@@ -20,8 +20,11 @@ const getInitials = (name: string) => {
 
 const Header: React.FC<HeaderProps> = ({ onJoinClassClick, profile, xpPerLevel }) => {
   const { t } = useTranslations();
-  const xpForCurrentLevelStart = (profile.level - 1) * xpPerLevel;
-  const xpInCurrentLevel = profile.xp - xpForCurrentLevelStart;
+  // Ensure level and xp have default values to prevent NaN
+  const level = Number(profile.level) || 1;
+  const xp = Number(profile.xp) || 0;
+  const xpForCurrentLevelStart = (level - 1) * xpPerLevel;
+  const xpInCurrentLevel = xp - xpForCurrentLevelStart;
   const progressPercentage = Math.max(0, Math.min(100, (xpInCurrentLevel / xpPerLevel) * 100));
 
   return (
@@ -38,7 +41,7 @@ const Header: React.FC<HeaderProps> = ({ onJoinClassClick, profile, xpPerLevel }
         <div className="flex-grow">
           <h1 className="font-bold text-lg">{profile.name}</h1>
           <div className="flex justify-between items-center mt-1">
-            <p className="text-xs text-gray-500 dark:text-gray-400">{t('level')} {profile.level}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('level')} {level}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{xpInCurrentLevel} / {xpPerLevel} XP</p>
           </div>
           <div className="w-full bg-gray-200 dark:bg-brand-mid-purple rounded-full h-1.5 mt-1">
