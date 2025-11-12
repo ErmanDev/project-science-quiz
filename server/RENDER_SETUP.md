@@ -4,15 +4,20 @@
 
 When deploying to Render, configure the following:
 
+### Root Directory
+**IMPORTANT:** Set the Root Directory to: `server`
+
 ### Build Command
 ```bash
-cd server && npm install && npm run build
+npm install && npm run build
 ```
 
 ### Start Command
 ```bash
-cd server && npm start
+npm start
 ```
+
+**Note:** If Root Directory is set to `server`, you don't need `cd server` in the commands.
 
 ### Environment Variables
 Set these in your Render dashboard:
