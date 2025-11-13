@@ -4,8 +4,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
-  // Use process.env directly - Vercel provides this during build
-  const apiUrl = process.env.VITE_API_URL || env.VITE_API_URL || 'https://project-science-quiz.onrender.com';
+  const apiUrl = 'https://project-science-quiz.onrender.com';
   
   return {
     server: {

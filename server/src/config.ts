@@ -7,22 +7,5 @@ const getFlag = (key: string, defaultValue: string) => {
 export const REQUIRE_VERIFICATION =
   getFlag('requireVerification', 'false') === 'true';
 
-// For server: use process.env
-// For browser: Vite replaces import.meta.env at build time
-export const API_URL = (() => {
-  if (typeof window === 'undefined') {
-    // Server environment (Node.js)
-    return process.env.VITE_API_URL || process.env.API_URL || 'https://project-science-quiz.onrender.com';
-  }
-  
-  // Browser environment (Vite)
-  // Check for Vite's injected constant first
-  // @ts-ignore
-  if (typeof __VITE_API_URL__ !== 'undefined' && __VITE_API_URL__) {
-    // @ts-ignore
-    return __VITE_API_URL__;
-  }
-  
-  // If that doesn't work, return default
-  return 'https://project-science-quiz.onrender.com';
-})();
+// Direct API URL - no fallbacks
+export const API_URL = 'https://project-science-quiz.onrender.com';
