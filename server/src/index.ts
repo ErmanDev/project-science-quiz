@@ -28,13 +28,21 @@ const envOrigins = (process.env.FRONTEND_ORIGINS || '')
   .filter(Boolean);
 const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
 
+// Allow Vercel preview deployments (they have .vercel.app domain)
+const vercelPattern = /\.vercel\.app$/;
+
 app.use(cors({
   origin(origin, cb) {
-    // Allow all origins in production if FRONTEND_ORIGINS is not set
-    // Or allow specific origins from env
-    if (!origin) return cb(null, true); // Allow requests with no origin (like Postman)
+    // Allow requests with no origin (like Postman, curl)
+    if (!origin) return cb(null, true);
     
-    // If FRONTEND_ORIGINS is set, only allow those
+    // Allow localhost for development
+    if (defaultOrigins.includes(origin)) return cb(null, true);
+    
+    // Allow Vercel preview deployments automatically
+    if (vercelPattern.test(origin)) return cb(null, true);
+    
+    // If FRONTEND_ORIGINS is set, check against it
     if (envOrigins.length > 0) {
       if (allowedOrigins.includes(origin)) return cb(null, true);
       return cb(new Error(`CORS: Origin ${origin} not allowed`));
