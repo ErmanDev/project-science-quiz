@@ -1,8 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Badge as BadgeType, BadgeCategory } from '../../data/badges';
 import { useTranslations } from '../../hooks/useTranslations';
+import { badgesApi } from '../../src/api';
 
 type FilterType = 'SOLO' | 'TEAM' | 'CLASSROOM';
+
+// Helper function to get current user from localStorage
+const getCurrentUser = () => {
+  try {
+    const raw = localStorage.getItem('currentUser');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
 
 /* -------------------------------------------------------
    1) Name → Filename map (based on your provided files)
@@ -188,12 +199,43 @@ interface BadgesScreenProps {
   badgeProgress: BadgeCategory[];
 }
 
-const BadgesScreen: React.FC<BadgesScreenProps> = ({ badgeProgress }) => {
+const BadgesScreen: React.FC<BadgesScreenProps> = ({ badgeProgress: initialBadgeProgress }) => {
   const [activeFilter, setActiveFilter] = useState<FilterType>('SOLO');
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
+  const [filteredBadgeProgress, setFilteredBadgeProgress] = useState<BadgeCategory[]>(initialBadgeProgress);
+  const [isLoading, setIsLoading] = useState(false);
   const { t } = useTranslations();
 
-  const displayedCategories = useMemo(() => badgeProgress, [badgeProgress]);
+  // Map FilterType to API mode format
+  const filterToMode: Record<FilterType, 'Solo' | 'Team' | 'Classroom'> = {
+    'SOLO': 'Solo',
+    'TEAM': 'Team',
+    'CLASSROOM': 'Classroom',
+  };
+
+  // Fetch badge progress when filter changes
+  useEffect(() => {
+    const me = getCurrentUser();
+    if (!me?.id) {
+      setFilteredBadgeProgress(initialBadgeProgress);
+      return;
+    }
+
+    setIsLoading(true);
+    const mode = filterToMode[activeFilter];
+    badgesApi.getProgress(me.id, mode)
+      .then((progress) => {
+        setFilteredBadgeProgress(progress);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.error('[BadgesScreen] Failed to load badge progress:', error);
+        setFilteredBadgeProgress(initialBadgeProgress);
+        setIsLoading(false);
+      });
+  }, [activeFilter]);
+
+  const displayedCategories = useMemo(() => filteredBadgeProgress, [filteredBadgeProgress]);
 
   return (
     <>

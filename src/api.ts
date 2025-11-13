@@ -41,7 +41,10 @@ export const rankingsApi = {
 };
 
 export const badgesApi = {
-  getProgress: (studentId: string) => request(`/badges/${encodeURIComponent(studentId)}`),
+  getProgress: (studentId: string, mode?: 'Solo' | 'Team' | 'Classroom') => {
+    const modeParam = mode ? `?mode=${encodeURIComponent(mode)}` : '';
+    return request(`/badges/${encodeURIComponent(studentId)}${modeParam}`);
+  },
 };
 
 export async function apiFindClassByCode(code: string) {

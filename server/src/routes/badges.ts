@@ -209,14 +209,28 @@ const badgeData: BadgeCategory[] = [
 
 /**
  * Calculate badge progress for a student based on their achievements
+ * @param studentId - The student ID
+ * @param mode - Optional filter by quiz mode: 'Solo' | 'Team' | 'Classroom'. If undefined, counts all modes.
  */
-function calculateBadgeProgress(studentId: string) {
+function calculateBadgeProgress(studentId: string, mode?: 'Solo' | 'Team' | 'Classroom') {
   const { submissions = [], users = [], classStudents = [], quizzes = [] } = db.data!;
 
   // Get student's submissions
-  const studentSubmissions = submissions.filter(
+  let studentSubmissions = submissions.filter(
     (s: any) => String(s.studentId) === String(studentId)
   );
+
+  // Filter submissions by quiz mode if mode is specified
+  if (mode) {
+    const quizIdsByMode = new Set(
+      (quizzes || [])
+        .filter((q: any) => String(q.mode || 'Classroom') === String(mode))
+        .map((q: any) => String(q.id))
+    );
+    studentSubmissions = studentSubmissions.filter((s: any) =>
+      quizIdsByMode.has(String(s.quizId))
+    );
+  }
 
   // Get student's class IDs
   const studentClassIds = new Set(
@@ -237,8 +251,32 @@ function calculateBadgeProgress(studentId: string) {
 
   // 3. Top 3 Leaderboard (Consistent Performer)
   // Calculate rankings for each class the student is in
+  // Only count overall class rankings if student has submissions in that class
   let top3Count = 0;
   for (const classId of studentClassIds) {
+    // Check if student has any submissions in quizzes from this class
+    // Quizzes have classIds (array), not classId (singular)
+    let classQuizzes = (quizzes || []).filter(
+      (q: any) => Array.isArray(q.classIds) && q.classIds.some((cid: any) => String(cid) === String(classId))
+    );
+    
+    // Filter by mode if specified
+    if (mode) {
+      classQuizzes = classQuizzes.filter(
+        (q: any) => String(q.mode || 'Classroom') === String(mode)
+      );
+    }
+    
+    const classQuizIds = new Set(classQuizzes.map((q: any) => String(q.id)));
+    const hasSubmissionsInClass = studentSubmissions.some(
+      (s: any) => classQuizIds.has(String(s.quizId))
+    );
+
+    // Only count overall class ranking if student has participated in at least one quiz
+    if (!hasSubmissionsInClass) {
+      continue;
+    }
+
     const classStudentIds = new Set(
       classStudents
         .filter((cs: any) => String(cs.classId) === classId)
@@ -285,6 +323,15 @@ function calculateBadgeProgress(studentId: string) {
 
     // For each quiz, check if student is in top 3
     quizSubmissions.forEach((subs, quizId) => {
+      // Get the quiz to check its mode
+      const quiz = (quizzes || []).find((q: any) => String(q.id) === quizId);
+      const quizMode = String(quiz?.mode || 'Classroom');
+      
+      // Skip if mode filter is specified and doesn't match
+      if (mode && quizMode !== String(mode)) {
+        return;
+      }
+      
       // Get all submissions for this quiz from students in the class
       const allQuizSubmissions = (submissions || [])
         .filter(
@@ -312,8 +359,32 @@ function calculateBadgeProgress(studentId: string) {
   const totalTop3Count = top3Count + quizTop3Count.size;
 
   // 4. Top 1 Leaderboard (Apex Achiever)
+  // Only count overall class rankings if student has submissions in that class
   let top1Count = 0;
   for (const classId of studentClassIds) {
+    // Check if student has any submissions in quizzes from this class
+    // Quizzes have classIds (array), not classId (singular)
+    let classQuizzes = (quizzes || []).filter(
+      (q: any) => Array.isArray(q.classIds) && q.classIds.some((cid: any) => String(cid) === String(classId))
+    );
+    
+    // Filter by mode if specified
+    if (mode) {
+      classQuizzes = classQuizzes.filter(
+        (q: any) => String(q.mode || 'Classroom') === String(mode)
+      );
+    }
+    
+    const classQuizIds = new Set(classQuizzes.map((q: any) => String(q.id)));
+    const hasSubmissionsInClass = studentSubmissions.some(
+      (s: any) => classQuizIds.has(String(s.quizId))
+    );
+
+    // Only count overall class ranking if student has participated in at least one quiz
+    if (!hasSubmissionsInClass) {
+      continue;
+    }
+
     const classStudentIds = new Set(
       classStudents
         .filter((cs: any) => String(cs.classId) === classId)
@@ -357,6 +428,15 @@ function calculateBadgeProgress(studentId: string) {
     });
 
     quizSubmissions.forEach((subs, quizId) => {
+      // Get the quiz to check its mode
+      const quiz = (quizzes || []).find((q: any) => String(q.id) === quizId);
+      const quizMode = String(quiz?.mode || 'Classroom');
+      
+      // Skip if mode filter is specified and doesn't match
+      if (mode && quizMode !== String(mode)) {
+        return;
+      }
+      
       const allQuizSubmissions = (submissions || [])
         .filter(
           (s: any) =>
@@ -450,19 +530,32 @@ function calculateBadgeProgress(studentId: string) {
 }
 
 /**
- * GET /api/badges/:studentId
+ * GET /api/badges/:studentId?mode=Solo|Team|Classroom
  * Returns badge progress for a specific student
+ * Optional query parameter 'mode' filters by quiz mode: 'Solo', 'Team', or 'Classroom'
  */
 router.get('/:studentId', async (req, res) => {
   await db.read();
   const { studentId } = req.params;
+  const { mode } = req.query;
 
   if (!studentId) {
     return res.status(400).json({ error: 'studentId is required' });
   }
 
+  // Validate mode if provided
+  let modeFilter: 'Solo' | 'Team' | 'Classroom' | undefined = undefined;
+  if (mode) {
+    const modeStr = String(mode);
+    if (modeStr === 'Solo' || modeStr === 'Team' || modeStr === 'Classroom') {
+      modeFilter = modeStr;
+    } else {
+      return res.status(400).json({ error: 'Invalid mode. Must be Solo, Team, or Classroom' });
+    }
+  }
+
   try {
-    const badgeProgress = calculateBadgeProgress(String(studentId));
+    const badgeProgress = calculateBadgeProgress(String(studentId), modeFilter);
     res.json(badgeProgress);
   } catch (error: any) {
     console.error('[Badges] Error calculating badge progress:', error);
