@@ -76,11 +76,17 @@ router.post('/', async (req, res) => {
   await db.read();
   const q = req.body ?? {};
   const id = q.id ?? Date.now().toString();
+  
+  // Validate mode - must be one of: Solo, Team, Classroom
+  const validModes = ['Solo', 'Team', 'Classroom'];
+  const providedMode = q.mode ? String(q.mode) : 'Classroom';
+  const mode = validModes.includes(providedMode) ? providedMode : 'Classroom';
+  
   const newQ = {
     id,
     title: q.title ?? 'Untitled',
     type: q.type ?? 'Normal',
-    mode: q.mode ?? 'Classroom',
+    mode,
     status: (q.status ?? 'draft').toLowerCase(),
     teacherId: String(q.teacherId ?? ''),
     questions: Array.isArray(q.questions) ? q.questions : [],
@@ -102,6 +108,18 @@ router.patch('/:id', async (req, res) => {
   if (idx < 0) return res.status(404).send('Quiz not found');
 
   const patch = req.body ?? {};
+  
+  // Validate mode if provided - must be one of: Solo, Team, Classroom
+  if (patch.mode !== undefined) {
+    const validModes = ['Solo', 'Team', 'Classroom'];
+    const providedMode = String(patch.mode);
+    if (validModes.includes(providedMode)) {
+      patch.mode = providedMode;
+    } else {
+      return res.status(400).json({ error: `Invalid mode. Must be one of: ${validModes.join(', ')}` });
+    }
+  }
+  
   const updated = { ...list[idx], ...patch };
   list[idx] = updated;
   await db.write();
