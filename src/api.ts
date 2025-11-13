@@ -1,5 +1,6 @@
 // Simple API client to talk to the new backend
-import { API_URL } from '../server/src/config';
+// Use import.meta.env directly - Vite replaces this at build time
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const API_BASE = import.meta.env.VITE_API_BASE || `${API_URL}/api`;
 
 let token: string | null = null;

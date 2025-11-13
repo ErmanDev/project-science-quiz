@@ -8,24 +8,33 @@ export const REQUIRE_VERIFICATION =
   getFlag('requireVerification', 'false') === 'true';
 
 // For server: use process.env
-// For browser: Vite replaces import.meta.env at build time
+// For browser: Vite injects __VITE_API_URL__ via define in vite.config.ts
+// or we can use import.meta.env.VITE_API_URL directly
 export const API_URL = (() => {
   if (typeof window === 'undefined') {
-    // Server environment
+    // Server environment (Node.js)
     return process.env.VITE_API_URL || process.env.API_URL || 'http://localhost:4000';
   }
   
-  // Browser environment
-  // Vite will replace import.meta.env.VITE_API_URL at build time
-  // We use a function to access it without syntax errors
-  const getEnvVar = () => {
-    try {
-      // Access through Function constructor to avoid syntax error
-      return new Function('return (typeof import !== "undefined" && import.meta?.env?.VITE_API_URL)')();
-    } catch {
-      return undefined;
-    }
-  };
+  // Browser environment (Vite)
+  // Try Vite's injected constant first (from vite.config.ts define)
+  // @ts-ignore - This is injected by Vite at build time
+  if (typeof __VITE_API_URL__ !== 'undefined') {
+    // @ts-ignore
+    return __VITE_API_URL__;
+  }
   
-  return getEnvVar() || 'http://localhost:4000';
+  // Fallback: try import.meta.env directly (Vite replaces this at build time)
+  // This works because Vite processes this file when imported by frontend code
+  try {
+    // @ts-expect-error - import.meta exists in Vite builds but TypeScript doesn't allow it in CommonJS
+    const meta = (globalThis as any)['import']?.meta;
+    if (meta?.env?.VITE_API_URL) {
+      return meta.env.VITE_API_URL;
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  return 'http://localhost:4000';
 })();

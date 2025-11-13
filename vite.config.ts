@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      '__VITE_API_URL__': JSON.stringify(env.VITE_API_URL || 'http://localhost:4000'),
     },
     resolve: {
       alias: {
