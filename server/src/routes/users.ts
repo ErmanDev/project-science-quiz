@@ -170,13 +170,13 @@ router.post('/students', requireAuth, async (req, res) => {
   if (exists) return res.status(409).json({ error: 'Email already used' });
 
   const now = new Date().toISOString();
-  const student: User & { level: number; exp: number; accuracy: number } = {
+  const student: User & { level: number; exp: number; accuracy: number; classId: string } = {
     id: nanoid(),
     role: 'student',
     email,
     name,
     passwordHash: bcrypt.hashSync(password, 10),
-    classId,
+    classId: classId || '',
     createdAt: now,
     updatedAt: now,
     level: DEFAULT_LEVEL,

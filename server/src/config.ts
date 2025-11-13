@@ -6,4 +6,4 @@ const getFlag = (key: string, defaultValue: string) => {
 export const REQUIRE_VERIFICATION =
   getFlag('requireVerification', 'false') === 'true';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+export const API_URL = process.env.VITE_API_URL || 'http://localhost:4000';
