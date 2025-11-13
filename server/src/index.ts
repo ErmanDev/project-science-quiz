@@ -30,9 +30,19 @@ const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
 
 app.use(cors({
   origin(origin, cb) {
-    // allow non-browser tools (no origin) and allowed dev origins
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error(`CORS: Origin ${origin} not allowed`));
+    // Allow all origins in production if FRONTEND_ORIGINS is not set
+    // Or allow specific origins from env
+    if (!origin) return cb(null, true); // Allow requests with no origin (like Postman)
+    
+    // If FRONTEND_ORIGINS is set, only allow those
+    if (envOrigins.length > 0) {
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: Origin ${origin} not allowed`));
+    }
+    
+    // If no FRONTEND_ORIGINS set, allow all origins (for development)
+    // In production, you should set FRONTEND_ORIGINS
+    return cb(null, true);
   },
   credentials: true, // ✅ allow cookies/authorization headers
 }));
