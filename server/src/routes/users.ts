@@ -191,6 +191,61 @@ router.post('/students', requireAuth, async (req, res) => {
   res.status(201).json(safe);
 });
 
+router.post('/teachers', requireAuth, async (req, res) => {
+  const actor = (req as any).user;
+  if (!actor || actor.role !== 'admin') {
+    return res.status(403).json({ error: 'Only administrators can create teacher accounts.' });
+  }
+
+  await initDB();
+
+  const { email, name, password, employeeId } = req.body || {};
+
+  const trimmedEmail = String(email || '').trim();
+  const trimmedName = String(name || '').trim();
+  const trimmedPassword = String(password || '');
+  const trimmedEmployeeId = String(employeeId || '').trim();
+
+  if (!trimmedEmail || !trimmedName || !trimmedPassword || !trimmedEmployeeId) {
+    return res.status(400).json({ error: 'email, name, password, and employeeId are required.' });
+  }
+
+  const users = db.data!.users || [];
+
+  const emailExists = users.find(
+    (u: any) => String(u.email || '').toLowerCase() === trimmedEmail.toLowerCase(),
+  );
+  if (emailExists) {
+    return res.status(409).json({ error: 'Email already registered.' });
+  }
+
+  const idExists = users.find((u: any) => String(u.id) === trimmedEmployeeId);
+  if (idExists) {
+    return res.status(409).json({ error: 'Employee ID already registered.' });
+  }
+
+  const now = new Date().toISOString();
+  const teacher: User & { level: number; exp: number; accuracy: number } = {
+    id: trimmedEmployeeId,
+    role: 'teacher',
+    email: trimmedEmail,
+    name: trimmedName,
+    passwordHash: bcrypt.hashSync(trimmedPassword, 10),
+    createdAt: now,
+    updatedAt: now,
+    level: DEFAULT_LEVEL,
+    exp: DEFAULT_EXP,
+    accuracy: DEFAULT_ACCURACY,
+  };
+
+  users.push(teacher);
+  db.data!.users = users;
+  await db.write();
+
+  const { passwordHash, ...safe } = teacher as any;
+  res.status(201).json(safe);
+});
+
 /**
  * Update stats for a user (e.g., after quiz submission).
  * Body:
