@@ -1,6 +1,7 @@
-import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import SciQuestLogo from './SciQuestLogo';
 import { API_URL } from '../server/src/config';
+import TeacherAccountForm, { TeacherAccountFormSubmitResult } from './TeacherAccountForm';
 
 interface AdminDashboardProps {
   onBackToLanding: () => void;
@@ -38,15 +39,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding, onLogo
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [createTeacherForm, setCreateTeacherForm] = useState({
-    name: '',
-    email: '',
-    employeeId: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [createTeacherBusy, setCreateTeacherBusy] = useState(false);
-  const [createTeacherError, setCreateTeacherError] = useState<string | null>(null);
+  const [showCreateTeacherForm, setShowCreateTeacherForm] = useState(false);
+  const [, setCreateTeacherBusy] = useState(false);
 
   const currentAdmin = useMemo(() => {
     try {
@@ -148,76 +142,61 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding, onLogo
 
   const totalClasses = classes.length;
 
-  const handleCreateTeacher = async (evt?: FormEvent) => {
-    evt?.preventDefault();
-    setCreateTeacherError(null);
-    setFeedback(null);
+  const handleCreateTeacher = useCallback(
+    async ({
+      fullName,
+      email,
+      password,
+      employeeId,
+    }: {
+      fullName: string;
+      email: string;
+      password: string;
+      employeeId: string;
+    }): Promise<TeacherAccountFormSubmitResult> => {
+      setFeedback(null);
 
-    const trimmedName = createTeacherForm.name.trim();
-    const trimmedEmail = createTeacherForm.email.trim();
-    const trimmedEmployeeId = createTeacherForm.employeeId.trim();
-    const password = createTeacherForm.password;
-    const confirmPassword = createTeacherForm.confirmPassword;
+      try {
+        const res = await fetch(`${API_URL}/api/users/teachers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders(),
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            name: fullName,
+            email,
+            employeeId,
+            password,
+          }),
+        });
 
-    if (!trimmedName || !trimmedEmail || !trimmedEmployeeId || !password || !confirmPassword) {
-      setCreateTeacherError('All fields are required.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setCreateTeacherError('Passwords do not match.');
-      return;
-    }
+        if (res.status === 401) {
+          setFeedback({ type: 'error', message: 'Session expired. Please log in again.' });
+          onLogout();
+          return { ok: false, error: 'Session expired. Please log in again.' };
+        }
 
-    setCreateTeacherBusy(true);
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const message =
+            typeof payload?.error === 'string' && payload.error.trim().length > 0
+              ? payload.error
+              : 'Unable to create teacher account.';
+          return { ok: false, error: message };
+        }
 
-    try {
-      const res = await fetch(`${API_URL}/api/users/teachers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders(),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: trimmedName,
-          email: trimmedEmail,
-          employeeId: trimmedEmployeeId,
-          password,
-        }),
-      });
-
-      if (res.status === 401) {
-        setFeedback({ type: 'error', message: 'Session expired. Please log in again.' });
-        onLogout();
-        return;
+        setFeedback({ type: 'success', message: 'Teacher account created successfully.' });
+        await loadData();
+        return { ok: true };
+      } catch (err) {
+        console.error('[AdminDashboard] create teacher failed', err);
+        return { ok: false, error: 'Unable to create teacher account.' };
       }
-
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const message =
-          typeof payload?.error === 'string' && payload.error.trim().length > 0
-            ? payload.error
-            : 'Unable to create teacher account.';
-        setCreateTeacherError(message);
-        return;
-      }
-
-      setFeedback({ type: 'success', message: 'Teacher account created successfully.' });
-      setCreateTeacherForm({
-        name: '',
-        email: '',
-        employeeId: '',
-        password: '',
-        confirmPassword: '',
-      });
-      await loadData();
-    } catch (err) {
-      console.error('[AdminDashboard] create teacher failed', err);
-      setCreateTeacherError('Unable to create teacher account.');
-    } finally {
-      setCreateTeacherBusy(false);
-    }
-  };
+    },
+    [API_URL, authHeaders, loadData, onLogout],
+  );
 
   const handleDeleteUser = async (user: AdminUser) => {
     if (!window.confirm(`Remove ${user.name} (${user.role}) permanently? This cannot be undone.`)) {
@@ -314,108 +293,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBackToLanding, onLogo
         </div>
 
         <div className="bg-white/95 dark:bg-brand-mid-purple/70 rounded-2xl sm:rounded-3xl shadow-xl border border-brand-light-purple/40 overflow-hidden">
-          <form
-            onSubmit={handleCreateTeacher}
-            className="border-b border-white/30 dark:border-brand-light-purple/30 px-4 sm:px-6 py-4 sm:py-5 bg-gray-50/80 dark:bg-brand-deep-purple/70"
-          >
-            <div className="flex flex-col lg:flex-row lg:items-end gap-3 sm:gap-4">
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1">
-                    Full name
-                  </label>
-                  <input
-                    type="text"
-                    value={createTeacherForm.name}
-                    onChange={(e) => {
-                      setCreateTeacherForm((prev) => ({ ...prev, name: e.target.value }));
-                      setCreateTeacherError(null);
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-brand-light-purple/40 bg-white dark:bg-brand-deep-purple/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                    placeholder="Jane Dela Cruz"
-                    disabled={createTeacherBusy}
-                  />
+          {showCreateTeacherForm ? (
+            <div className="border-b border-white/30 dark:border-brand-light-purple/30 px-4 sm:px-6 py-6 bg-gray-50/80 dark:bg-brand-deep-purple/70">
+              <div className="max-w-md mx-auto text-center space-y-6">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold">Add a Teacher</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    Fill out the details below to create a teacher account.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={createTeacherForm.email}
-                    onChange={(e) => {
-                      setCreateTeacherForm((prev) => ({ ...prev, email: e.target.value }));
-                      setCreateTeacherError(null);
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-brand-light-purple/40 bg-white dark:bg-brand-deep-purple/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                    placeholder="teacher@school.edu"
-                    disabled={createTeacherBusy}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1">
-                    Employee ID
-                  </label>
-                  <input
-                    type="text"
-                    value={createTeacherForm.employeeId}
-                    onChange={(e) => {
-                      setCreateTeacherForm((prev) => ({ ...prev, employeeId: e.target.value }));
-                      setCreateTeacherError(null);
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-brand-light-purple/40 bg-white dark:bg-brand-deep-purple/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                    placeholder="EMP-001"
-                    disabled={createTeacherBusy}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    value={createTeacherForm.password}
-                    onChange={(e) => {
-                      setCreateTeacherForm((prev) => ({ ...prev, password: e.target.value }));
-                      setCreateTeacherError(null);
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-brand-light-purple/40 bg-white dark:bg-brand-deep-purple/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                    placeholder="••••••••"
-                    disabled={createTeacherBusy}
-                  />
-                </div>
-                <div className="sm:col-span-2 xl:col-span-4">
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-1">
-                    Confirm password
-                  </label>
-                  <input
-                    type="password"
-                    value={createTeacherForm.confirmPassword}
-                    onChange={(e) => {
-                      setCreateTeacherForm((prev) => ({
-                        ...prev,
-                        confirmPassword: e.target.value,
-                      }));
-                      setCreateTeacherError(null);
-                    }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-brand-light-purple/40 bg-white dark:bg-brand-deep-purple/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                    placeholder="Repeat password"
-                    disabled={createTeacherBusy}
-                  />
-                </div>
+                <TeacherAccountForm
+                  onSubmit={handleCreateTeacher}
+                  onSuccess={() => {
+                    setShowCreateTeacherForm(false);
+                  }}
+                  onCancel={() => setShowCreateTeacherForm(false)}
+                  includeCancelButton
+                  submitLabel="Create Teacher"
+                  cancelLabel="Cancel"
+                  onLoadingChange={setCreateTeacherBusy}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="border-b border-white/30 dark:border-brand-light-purple/30 px-4 sm:px-6 py-4 sm:py-5 bg-gray-50/80 dark:bg-brand-deep-purple/70 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-700 dark:text-white">Teacher Management</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-300">Add new teachers to give them access to their dashboard.</p>
               </div>
               <button
-                type="submit"
-                disabled={createTeacherBusy}
-                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 rounded-full bg-brand-accent text-white font-semibold text-sm shadow hover:bg-brand-accent/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setShowCreateTeacherForm(true)}
+                className="w-full sm:w-auto px-4 sm:px-6 py-2.5 rounded-full bg-brand-accent text-white font-semibold text-sm shadow hover:bg-brand-accent/90 transition"
               >
-                {createTeacherBusy ? 'Creating…' : 'Create Teacher'}
+                Add Teacher
               </button>
             </div>
-            {createTeacherError && (
-              <p className="mt-2 text-xs text-red-500 text-center sm:text-left">{createTeacherError}</p>
-            )}
-          </form>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/30 dark:border-brand-light-purple/30">
             <div className="flex gap-2 sm:gap-3">
               {(['teachers', 'students'] as TabKey[]).map((tab) => (
