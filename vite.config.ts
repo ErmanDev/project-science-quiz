@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   // Use process.env directly - Vercel provides this during build
-  const apiUrl = process.env.VITE_API_URL || env.VITE_API_URL || 'http://localhost:4000';
+  const apiUrl = process.env.VITE_API_URL || env.VITE_API_URL || 'https://project-science-quiz.onrender.com';
   
   return {
     server: {
@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         // everything starting with /api will be forwarded to your Express server
         '/api': {
-          target: 'http://localhost:4000',
+          target: 'https://project-science-quiz.onrender.com',
           changeOrigin: true,
         },
       },

@@ -12,7 +12,7 @@ export const REQUIRE_VERIFICATION =
 export const API_URL = (() => {
   if (typeof window === 'undefined') {
     // Server environment (Node.js)
-    return process.env.VITE_API_URL || process.env.API_URL || 'http://localhost:4000';
+    return process.env.VITE_API_URL || process.env.API_URL || 'https://project-science-quiz.onrender.com';
   }
   
   // Browser environment (Vite)
@@ -24,5 +24,5 @@ export const API_URL = (() => {
   }
   
   // If that doesn't work, return default
-  return 'http://localhost:4000';
+  return 'https://project-science-quiz.onrender.com';
 })();

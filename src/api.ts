@@ -1,6 +1,6 @@
 // Simple API client to talk to the new backend
 // Use import.meta.env directly - Vite replaces this at build time
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://project-science-quiz.onrender.com';
 const API_BASE = import.meta.env.VITE_API_BASE || `${API_URL}/api`;
 
 let token: string | null = null;
