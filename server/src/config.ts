@@ -27,7 +27,7 @@ export const API_URL = (() => {
   // Fallback: try import.meta.env directly (Vite replaces this at build time)
   // This works because Vite processes this file when imported by frontend code
   try {
-    // @ts-expect-error - import.meta exists in Vite builds but TypeScript doesn't allow it in CommonJS
+   
     const meta = (globalThis as any)['import']?.meta;
     if (meta?.env?.VITE_API_URL) {
       return meta.env.VITE_API_URL;

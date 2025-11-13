@@ -36,6 +36,7 @@ type ServerSubmission = {
   score?: number;
   percent?: number;
   submittedAt?: string;
+  questions?: Array<{ id: string | number; points: number }>;
 };
 
 type ServerQuizSummary = {
@@ -487,10 +488,10 @@ const App: React.FC = () => {
             // If not found, create a minimal done quiz from the quizId
             // Try to get score from submission if available
             const submission = submissions.find(s => String(s.quizId) === String(quizId));
-            const scoreStr = submission 
-              ? `${submission.score ?? 0}/${submission.totalPoints ?? 0}`
+            const scoreStr = submission
+              ? `${submission.score ?? 0}/${(submission.questions || []).reduce((s, it) => s + (it.points || 0), 0)}`
               : '0/0';
-            
+
             setLastCompletedQuizStats({
               quiz: {
                 id: quizId as any,
